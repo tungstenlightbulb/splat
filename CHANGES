@@ -1,3 +1,13 @@
+Release X.X.X:
+By Peter V. Watkins <watkipet@gmail.com> (XX-XXX-XX)
+
+* Moved HD versus standard Splat from a build option into a runtime option. 
+  Also removed maxpages logic from build to runtime. These are specified 
+  with the X and X flags respectively.
+
+
+----------------------------------------------------------------------------
+
 Release 1.4.2:
 By John A. Magliacane <kd2bd@amsat.org> (08-Dec-14)
 
