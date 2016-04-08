@@ -29,77 +29,10 @@
 #include <unistd.h>
 #include "fontdata.h"
 #include "splat.h"
+#include "itwom3.0.h"
 
 #define GAMMA 2.5
 #define BZBUFFER 65536
-
-#if HD_MODE==0
-	#if MAXPAGES==4
-	#define ARRAYSIZE 4950
-	#endif
-
-	#if MAXPAGES==9
-	#define ARRAYSIZE 10870
-	#endif
-
-	#if MAXPAGES==16
-	#define ARRAYSIZE 19240
-	#endif
-
-	#if MAXPAGES==25
-	#define ARRAYSIZE 30025
-	#endif
-
-	#if MAXPAGES==36
-	#define ARRAYSIZE 43217
-	#endif
-
-	#if MAXPAGES==49
-	#define ARRAYSIZE 58813
-	#endif
-
-	#if MAXPAGES==64
-	#define ARRAYSIZE 76810
-	#endif
-
-	#define IPPD 1200
-#endif
-
-#if HD_MODE==1
-	#if MAXPAGES==1
-	#define ARRAYSIZE 5092 
-	#endif
-
-	#if MAXPAGES==4
-	#define ARRAYSIZE 14844 
-	#endif
-
-	#if MAXPAGES==9
-	#define ARRAYSIZE 32600
-	#endif
-
-	#if MAXPAGES==16
-	#define ARRAYSIZE 57713
-	#endif
-
-	#if MAXPAGES==25
-	#define ARRAYSIZE 90072
-	#endif
-
-	#if MAXPAGES==36
-	#define ARRAYSIZE 129650
-	#endif
-
-	#if MAXPAGES==49 
-	#define ARRAYSIZE 176437
-	#endif
-
-	#if MAXPAGES==64
-	#define ARRAYSIZE 230430
-	#endif
-
-	#define IPPD 3600
-#endif
 
 #ifndef PI
 #define PI 3.141592653589793
@@ -113,15 +46,10 @@
 #define HALFPI 1.570796326794896
 #endif
 
-#define DEG2RAD 1.74532925199e-02
-#define EARTHRADIUS 20902230.97
-#define	METERS_PER_MILE 1609.344
-#define METERS_PER_FOOT 0.3048
-#define	KM_PER_MILE 1.609344
-#define FOUR_THIRDS 1.3333333333333
 
-char 	string[255], sdf_path[255], opened=0, gpsav=0, splat_name[10],
-	splat_version[6], dashes[80], olditm;
+
+char 	string[255], sdf_path[SDF_PATH_SIZE], opened=0, gpsav=0, splat_name[SPLAT_NAME_SIZE],
+	splat_version[SPLAT_VERSION_SIZE], dashes[DASHES_SIZE], olditm;
 
 double	earthradius, max_range=0.0, forced_erp=-1.0, dpp, ppd,
 	fzone_clearance=0.6, forced_freq, clutter;
@@ -130,50 +58,18 @@ int	min_north=90, max_north=-90, min_west=360, max_west=-1, ippd, mpi,
 	max_elevation=-32768, min_elevation=32768, bzerror, contour_threshold;
 
 unsigned char got_elevation_pattern, got_azimuth_pattern, metric=0, dbm=0, smooth_contours=0;
+struct site *site;
 
-struct site {	double lat;
-		double lon;
-		float alt;
-		char name[50];
-		char filename[255];
-	    } 	site;
+struct path *path;
 
-struct path {	double lat[ARRAYSIZE];
-		double lon[ARRAYSIZE];
-		double elevation[ARRAYSIZE];
-		double distance[ARRAYSIZE];
-		int length;
-	    }	path;
-
-struct dem {	int min_north;
-		int max_north;
-		int min_west;
-		int max_west;
-		int max_el;
-		int min_el;
-		short data[IPPD][IPPD];
-		unsigned char mask[IPPD][IPPD];
-		unsigned char signal[IPPD][IPPD];
-           }	dem[MAXPAGES];
-
-struct LR {	double eps_dielect; 
-		double sgm_conductivity; 
-		double eno_ns_surfref;
-		double frq_mhz; 
-		double conf; 
-		double rel;
-		double erp;
-		int radio_climate;  
-		int pol;
-		float antenna_pattern[361][1001];
-          }	LR;
+struct LR *LR;
 
 struct region { unsigned char color[32][3];
 		int level[32];
 		int levels;
 	      }	region;
 
-double elev[ARRAYSIZE+10];
+
 
 void point_to_point(double elev[], double tht_m, double rht_m,
 	  double eps_dielect, double sgm_conductivity, double eno_ns_surfref,
@@ -184,8 +80,6 @@ void point_to_point_ITM(double elev[], double tht_m, double rht_m,
 	  double eps_dielect, double sgm_conductivity, double eno_ns_surfref,
 	  double frq_mhz, int radio_climate, int pol, double conf,
 	  double rel, double &dbloss, char *strmode, int &errnum);
-
-double ITWOMVersion();
 
 int interpolate(int y0, int y1, int x0, int x1, int n)
 {
@@ -306,7 +200,7 @@ char *dec2dms(double decimal)
 	return (string);
 }
 
-int PutMask(double lat, double lon, int value)
+int PutMask(double lat, double lon, int value, dem dem[])
 {
 	/* Lines, text, markings, and coverage areas are stored in a
 	   mask that is combined with topology data when topographic
@@ -314,7 +208,7 @@ int PutMask(double lat, double lon, int value)
 	   bits in the mask based on the latitude and longitude of the
 	   area pointed to. */
 
-	int	x, y, indx;
+	int	x = 0, y = 0, indx;
 	char	found;
 
 	for (indx=0, found=0; indx<MAXPAGES && found==0;)
@@ -338,7 +232,7 @@ int PutMask(double lat, double lon, int value)
 		return -1;
 }
 
-int OrMask(double lat, double lon, int value)
+int OrMask(double lat, double lon, int value, dem dem[])
 {
 	/* Lines, text, markings, and coverage areas are stored in a
 	   mask that is combined with topology data when topographic
@@ -346,7 +240,7 @@ int OrMask(double lat, double lon, int value)
 	   the mask based on the latitude and longitude of the area
 	   pointed to. */
 
-	int	x, y, indx;
+	int	x = 0, y = 0, indx;
 	char	found;
 
 	for (indx=0, found=0; indx<MAXPAGES && found==0;)
@@ -370,20 +264,20 @@ int OrMask(double lat, double lon, int value)
 		return -1;
 }
 
-int GetMask(double lat, double lon)
+int GetMask(double lat, double lon, dem dem[])
 {
 	/* This function returns the mask bits based on the latitude
 	   and longitude given. */
 
-	return (OrMask(lat,lon,0));
+	return (OrMask(lat,lon,0, dem));
 }
 
-int PutSignal(double lat, double lon, unsigned char signal)
+int PutSignal(double lat, double lon, unsigned char signal, dem dem[])
 {
 	/* This function writes a signal level (0-255)
 	   at the specified location for later recall. */
 
-	int	x, y, indx;
+	int	x = 0, y = 0, indx;
 	char	found;
 
 	for (indx=0, found=0; indx<MAXPAGES && found==0;)
@@ -407,13 +301,13 @@ int PutSignal(double lat, double lon, unsigned char signal)
 		return 0;
 }
 
-unsigned char GetSignal(double lat, double lon)
+unsigned char GetSignal(double lat, double lon, dem dem[])
 {
 	/* This function reads the signal level (0-255) at the
 	   specified location that was previously written by the
 	   complimentary PutSignal() function. */
 
-	int	x, y, indx;
+	int	x = 0, y = 0, indx;
 	char	found;
 
 	for (indx=0, found=0; indx<MAXPAGES && found==0;)
@@ -433,14 +327,14 @@ unsigned char GetSignal(double lat, double lon)
 		return 0;
 }
 
-double GetElevation(struct site location)
+double GetElevation(struct site location, dem dem[])
 {
 	/* This function returns the elevation (in feet) of any location
 	   represented by the digital elevation model data in memory.
 	   Function returns -5000.0 for locations not found in memory. */
 
 	char	found;
-	int	x, y, indx;
+	int	x = 0, y = 0, indx;
 	double	elevation;
 
 	for (indx=0, found=0; indx<MAXPAGES && found==0;)
@@ -462,7 +356,7 @@ double GetElevation(struct site location)
 	return elevation;
 }
 
-int AddElevation(double lat, double lon, double height)
+int AddElevation(double lat, double lon, double height, dem dem[])
 {
 	/* This function adds a user-defined terrain feature
 	   (in meters AGL) to the digital elevation model data
@@ -470,7 +364,7 @@ int AddElevation(double lat, double lon, double height)
 	   not found in memory. */
 
 	char	found;
-	int	x, y, indx;
+	int	x = 0, y = 0, indx;
 
 	for (indx=0, found=0; indx<MAXPAGES && found==0;)
 	{
@@ -558,7 +452,7 @@ double Azimuth(struct site source, struct site destination)
 	return (azimuth/DEG2RAD);		
 }
 
-double ElevationAngle(struct site source, struct site destination)
+double ElevationAngle(struct site source, struct site destination,dem dem[])
 {
 	/* This function returns the angle of elevation (in degrees)
 	   of the destination as seen from the source location.
@@ -567,10 +461,10 @@ double ElevationAngle(struct site source, struct site destination)
 	   (downtilt), as referenced to a normal to the center of
 	   the earth. */
 	   
-	register double a, b, dx;
+	double a, b, dx;
 
-	a=GetElevation(destination)+destination.alt+earthradius;
-	b=GetElevation(source)+source.alt+earthradius;
+	a=GetElevation(destination,dem)+destination.alt+earthradius;
+	b=GetElevation(source,dem)+source.alt+earthradius;
 
  	dx=5280.0*Distance(source,destination);
 
@@ -579,7 +473,7 @@ double ElevationAngle(struct site source, struct site destination)
 	return ((180.0*(acos(((b*b)+(dx*dx)-(a*a))/(2.0*b*dx)))/PI)-90.0);
 }
 
-void ReadPath(struct site source, struct site destination)
+void ReadPath(struct site source, struct site destination,dem dem[])
 {
 	/* This function generates a sequence of latitude and
 	   longitude positions between source and destination
@@ -631,10 +525,10 @@ void ReadPath(struct site source, struct site destination)
 		lat1=lat1/DEG2RAD;
 		lon1=lon1/DEG2RAD;
 
-		path.lat[c]=lat1;
-		path.lon[c]=lon1;
-		path.elevation[c]=GetElevation(source);
-		path.distance[c]=0.0;
+		path->lat[c]=lat1;
+		path->lon[c]=lon1;
+		path->elevation[c]=GetElevation(source,dem);
+		path->distance[c]=0.0;
 	}
 
 	for (distance=0.0, c=0; (total_distance!=0.0 && distance<=total_distance && c<ARRAYSIZE); c++, distance=miles_per_sample*(double)c)
@@ -670,32 +564,32 @@ void ReadPath(struct site source, struct site destination)
 		lat2=lat2/DEG2RAD;
 		lon2=lon2/DEG2RAD;
 
-		path.lat[c]=lat2;
-		path.lon[c]=lon2;
+		path->lat[c]=lat2;
+		path->lon[c]=lon2;
 		tempsite.lat=lat2;
 		tempsite.lon=lon2;
-		path.elevation[c]=GetElevation(tempsite);
-		path.distance[c]=distance;
+		path->elevation[c]=GetElevation(tempsite, dem);
+		path->distance[c]=distance;
 	}
 
-	/* Make sure exact destination point is recorded at path.length-1 */
+	/* Make sure exact destination point is recorded at path->length-1 */
 
 	if (c<ARRAYSIZE)
 	{
-		path.lat[c]=destination.lat;
-		path.lon[c]=destination.lon;
-		path.elevation[c]=GetElevation(destination);
-		path.distance[c]=total_distance;
+		path->lat[c]=destination.lat;
+		path->lon[c]=destination.lon;
+		path->elevation[c]=GetElevation(destination,dem);
+		path->distance[c]=total_distance;
 		c++;
 	}
 
 	if (c<ARRAYSIZE)
-		path.length=c;
+		path->length=c;
 	else
-		path.length=ARRAYSIZE-1;
+		path->length=ARRAYSIZE-1;
 }
 
-double ElevationAngle2(struct site source, struct site destination, double er)
+double ElevationAngle2(struct site source, struct site destination, double er, dem dem[])
 {
 	/* This function returns the angle of elevation (in degrees)
 	   of the destination as seen from the source location, UNLESS
@@ -708,15 +602,15 @@ double ElevationAngle2(struct site source, struct site destination, double er)
 	double	source_alt, destination_alt, cos_xmtr_angle,
 		cos_test_angle, test_alt, elevation, distance,
 		source_alt2, first_obstruction_angle=0.0;
-	struct	path temp;
+//	struct	path *temp;
+//
+//	temp=path;
 
-	temp=path;
-
-	ReadPath(source,destination);
+	ReadPath(source,destination,dem);
 
 	distance=5280.0*Distance(source,destination);
-	source_alt=er+source.alt+GetElevation(source);
-	destination_alt=er+destination.alt+GetElevation(destination);
+	source_alt=er+source.alt+GetElevation(source, dem);
+	destination_alt=er+destination.alt+GetElevation(destination, dem);
 	source_alt2=source_alt*source_alt;
 
 	/* Calculate the cosine of the elevation angle of the
@@ -730,11 +624,11 @@ double ElevationAngle2(struct site source, struct site destination, double er)
 	   at the source since we're interested in identifying the FIRST
 	   obstruction along the path between source and destination. */
  
-	for (x=2, block=0; x<path.length && block==0; x++)
+	for (x=2, block=0; x<path->length && block==0; x++)
 	{
-		distance=5280.0*path.distance[x];
+		distance=5280.0*path->distance[x];
 
-		test_alt=earthradius+(path.elevation[x]==0.0?path.elevation[x]:path.elevation[x]+clutter);
+		test_alt=earthradius+(path->elevation[x]==0.0?path->elevation[x]:path->elevation[x]+clutter);
 
 		cos_test_angle=((source_alt2)+(distance*distance)-(test_alt*test_alt))/(2.0*source_alt*distance);
 
@@ -759,12 +653,12 @@ double ElevationAngle2(struct site source, struct site destination, double er)
 	else
 		elevation=((acos(cos_xmtr_angle))/DEG2RAD)-90.0;
 
-	path=temp;
+//	path=temp;
 
 	return elevation;
 }
 
-double AverageTerrain(struct site source, double azimuthx, double start_distance, double end_distance)
+double AverageTerrain(struct site source, double azimuthx, double start_distance, double end_distance,dem dem[])
 {
 	/* This function returns the average terrain calculated in
 	   the direction of "azimuth" (degrees) between "start_distance"
@@ -825,26 +719,26 @@ double AverageTerrain(struct site source, double azimuthx, double start_distance
 	   the radial, then the average terrain cannot
 	   be accurately calculated.  Return -9999.0 */
 
-	if (GetElevation(destination)<-4999.0)
+	if (GetElevation(destination,dem)<-4999.0)
 		return (-9999.0);
 	else
 	{
-		ReadPath(source,destination);
+		ReadPath(source,destination,dem);
 
-		endpoint=path.length;
+		endpoint=path->length;
 
 		/* Shrink the length of the radial if the
 		   outermost portion is not over U.S. land. */
 
-		for (c=endpoint-1; c>=0 && path.elevation[c]==0.0; c--);
+		for (c=endpoint-1; c>=0 && path->elevation[c]==0.0; c--);
 
 		endpoint=c+1;
 
 		for (c=0, samples=0; c<endpoint; c++)
 		{
-			if (path.distance[c]>=start_distance)
+			if (path->distance[c]>=start_distance)
 			{
-				terrain+=(path.elevation[c]==0.0?path.elevation[c]:path.elevation[c]+clutter);
+				terrain+=(path->elevation[c]==0.0?path->elevation[c]:path->elevation[c]+clutter);
 				samples++;
 			}
 		}
@@ -858,7 +752,7 @@ double AverageTerrain(struct site source, double azimuthx, double start_distance
 	}
 }
 
-double haat(struct site antenna)
+double haat(struct site antenna, dem dem[])
 {
 	/* This function returns the antenna's Height Above Average
 	   Terrain (HAAT) based on FCC Part 73.313(d).  If a critical
@@ -875,7 +769,7 @@ double haat(struct site antenna)
 
 	for (c=0, azi=0; azi<=315 && error==0; azi+=45)
 	{
-		terrain=AverageTerrain(antenna, (double)azi, 2.0, 10.0);
+		terrain=AverageTerrain(antenna, (double)azi, 2.0, 10.0, dem);
 
 		if (terrain<-9998.0)  /* SDF data is missing */
 			error=1;
@@ -892,12 +786,12 @@ double haat(struct site antenna)
 	else
 	{
 		avg_terrain=(sum/(double)c);
-		haat=(antenna.alt+GetElevation(antenna))-avg_terrain;
+		haat=(antenna.alt+GetElevation(antenna, dem))-avg_terrain;
 		return haat;
 	}
 }
 
-void PlaceMarker(struct site location)
+void PlaceMarker(struct site location, dem dem[])
 {
 	/* This function places text and marker data in the mask array
 	   for illustration on topographic maps generated by SPLAT!.
@@ -938,7 +832,7 @@ void PlaceMarker(struct site location)
 
 		for (a=0, x=lat-p3; (x<=xmax && x>=xmin && a<7); x+=p1, a++)
 			for (b=0, y=lon-p3; (LonDiff(y,ymax)<=0.0) && (LonDiff(y,ymin)>=dpp) && b<7; y+=p1, b++)
-				occupied|=(GetMask(x,y)&2);
+				occupied|=(GetMask(x,y, dem)&2);
 
 		if (occupied==0)
 		{
@@ -971,7 +865,7 @@ void PlaceMarker(struct site location)
 					{
 						for (b=0; b<(int)strlen(location.name); b++)
 							for (c=0; c<8; c++, y-=p1)
-								occupied|=(GetMask(x,y)&2);
+								occupied|=(GetMask(x,y, dem)&2);
 						x-=p1;
 						y=texty;
 					}
@@ -999,7 +893,7 @@ void PlaceMarker(struct site location)
 					{
 						for (b=0; b<(int)strlen(location.name); b++)
 							for (c=0; c<8; c++, y-=p1)
-								occupied|=(GetMask(x,y)&2);
+								occupied|=(GetMask(x,y, dem)&2);
 						x-=p1;
 						y=texty;
 					}
@@ -1032,7 +926,7 @@ void PlaceMarker(struct site location)
 					{
 						for (b=0; b<(int)strlen(location.name); b++)
 							for (c=0; c<8; c++, y-=p1)
-								occupied|=(GetMask(x,y)&2);
+								occupied|=(GetMask(x,y, dem)&2);
 						x-=p1;
 						y=texty;
 					}
@@ -1062,7 +956,7 @@ void PlaceMarker(struct site location)
 					{
 						for (b=0; b<(int)strlen(location.name); b++)
 							for (c=0; c<8; c++, y-=p1)
-								occupied|=(GetMask(x,y)&2);
+								occupied|=(GetMask(x,y, dem)&2);
 						x-=p1;
 						y=texty;
 					}
@@ -1094,7 +988,7 @@ void PlaceMarker(struct site location)
 
 						for (c=128; c>0; c=c>>1, y-=p1)
 							if (byte&c)
-								OrMask(x,y,2);
+								OrMask(x,y,2, dem);
 					}
 
 					x-=p1;
@@ -1106,7 +1000,7 @@ void PlaceMarker(struct site location)
 
 				for (a=0, x=lat-p3; (x<=xmax && x>=xmin && a<7); x+=p1, a++)
 					for (b=0, y=lon-p3; (LonDiff(y,ymax)<=0.0) && (LonDiff(y,ymin)>=dpp) && b<7; y+=p1, b++)
-						OrMask(x,y,2);
+						OrMask(x,y,2,dem);
 			}
 		}
 	}
@@ -1125,13 +1019,13 @@ double ReadBearing(char *input)
  
 	double	seconds, bearing=0.0;
 	char	string[20];
-	int	a, b, length, degrees, minutes;
+	int	a, b, degrees, minutes;
 
 	/* Copy "input" to "string", and ignore any extra
 	   spaces that might be present in the process. */
 
 	string[0]=0;
-	length=strlen(input);
+	size_t length=strlen(input);
 
 	for (a=0, b=0; a<length && a<18; a++)
 	{
@@ -1185,12 +1079,11 @@ struct site LoadQTH(char *filename)
 	   or 'm', or by the word "meters" or "Meters", in which
 	   case meters is assumed, and is handled accordingly. */
 
-	int	x;
 	char	string[50], qthfile[255];
 	struct	site tempsite;
 	FILE	*fd=NULL;
 
-	x=strlen(filename);
+	size_t x = strlen(filename);
 	strncpy(qthfile, filename, 254);
 
 	if (qthfile[x-3]!='q' || qthfile[x-2]!='t' || qthfile[x-1]!='h')
@@ -1631,12 +1524,12 @@ void LoadPAT(char *filename)
 			else
 				az=1.0;
 
-			LR.antenna_pattern[x][y]=az*elevation;
+			LR->antenna_pattern[x][y]=az*elevation;
 		}
 	}
 }
 
-int LoadSDF_SDF(char *name)
+int LoadSDF_SDF(char *name, dem dem[])
 {
 	/* This function reads uncompressed SPLAT Data Files (.sdf)
 	   containing digital elevation model data into memory.
@@ -1779,7 +1672,7 @@ int LoadSDF_SDF(char *name)
 
 			else
 			{
-				if (fabs(dem[indx].min_west-min_west)<180.0)
+				if (fabs((float) dem[indx].min_west-min_west)<180.0)
 				{
  					if (dem[indx].min_west<min_west)
 						min_west=dem[indx].min_west;
@@ -1865,7 +1758,7 @@ char *BZfgets(BZFILE *bzfd, unsigned length)
 	return (output);
 }
 
-int LoadSDF_BZ(char *name)
+int LoadSDF_BZ(char *name, dem dem[])
 {
 	/* This function reads .bz2 compressed SPLAT Data Files containing
 	   digital elevation model data into memory.  Elevation data,
@@ -2036,7 +1929,7 @@ int LoadSDF_BZ(char *name)
 		return 0;
 }
 
-char LoadSDF(char *name)
+char LoadSDF(char *name, dem dem[])
 {
 	/* This function loads the requested SDF file from the filesystem.
 	   It first tries to invoke the LoadSDF_SDF() function to load an
@@ -2053,12 +1946,12 @@ char LoadSDF(char *name)
 
 	/* Try to load an uncompressed SDF first. */
 
-	return_value=LoadSDF_SDF(name);
+	return_value=LoadSDF_SDF(name, dem);
 
 	/* If that fails, try loading a compressed SDF. */
 
 	if (return_value==0 || return_value==-1)
-		return_value=LoadSDF_BZ(name);
+		return_value=LoadSDF_BZ(name, dem);
 
 	/* If neither format can be found, then assume the area is water. */
 
@@ -2174,7 +2067,7 @@ char LoadSDF(char *name)
 	return return_value;
 }
 
-void LoadCities(char *filename)
+void LoadCities(char *filename, dem dem[])
 {
 	/* This function reads SPLAT! city/site files, and plots
 	   the locations and names of the cities and site locations
@@ -2222,7 +2115,7 @@ void LoadCities(char *filename)
 			if (city_site.lon<0.0)
 				city_site.lon+=360.0;
 
-			PlaceMarker(city_site);
+			PlaceMarker(city_site,dem);
 
 			fgets(input,78,fd);
 		}
@@ -2236,7 +2129,7 @@ void LoadCities(char *filename)
 		fprintf(stderr,"\n*** ERROR: \"%s\": not found!",filename);
 }
 
-void LoadUDT(char *filename)
+void LoadUDT(char *filename, dem dem[])
 {
 	/* This function reads a file containing User-Defined Terrain
 	   features for their addition to the digital elevation model
@@ -2374,7 +2267,7 @@ void LoadUDT(char *filename)
 			} while (feof(fd2)==0 && z==0);
 
 			if (z==0)  /* No duplicate found */
-				AddElevation(xpix*dpp, ypix*dpp, height);
+				AddElevation(xpix*dpp, ypix*dpp, height, dem);
 
 			fscanf(fd1,"%d, %d, %lf", &xpix, &ypix, &height);
 			y++;
@@ -2394,7 +2287,7 @@ void LoadUDT(char *filename)
 	fprintf(stdout,"\n");
 }
 
-void LoadBoundaries(char *filename)
+void LoadBoundaries(char *filename, dem dem[])
 {
 	/* This function reads Cartographic Boundary Files available from
 	   the U.S. Census Bureau, and plots the data contained in those
@@ -2432,10 +2325,10 @@ void LoadBoundaries(char *filename)
 				destination.lat=lat1;
 				destination.lon=(lon1>0.0 ? 360.0-lon1 : -lon1);
 
-				ReadPath(source,destination);
+				ReadPath(source,destination,dem);
 
-				for (x=0; x<path.length; x++)
-					OrMask(path.lat[x],path.lon[x],4);
+				for (x=0; x<path->length; x++)
+					OrMask(path->lat[x],path->lon[x],4,dem);
 
 				lat0=lat1;
 				lon0=lon1;
@@ -2470,20 +2363,20 @@ char ReadLRParm(struct site txsite, char forced_read)
 
 	double	din;
 	char	filename[255], string[80], *pointer=NULL, return_value=0;
-	int	iin, ok=0, x;
+	int	iin = 0, ok=0, x;
 	FILE	*fd=NULL, *outfile=NULL;
 
 	/* Default parameters */
 
-	LR.eps_dielect=0.0;
-	LR.sgm_conductivity=0.0;
-	LR.eno_ns_surfref=0.0;
-	LR.frq_mhz=0.0;
-	LR.radio_climate=0;
-	LR.pol=0;
-	LR.conf=0.0;
-	LR.rel=0.0;
-	LR.erp=0.0;
+	LR->eps_dielect=0.0;
+	LR->sgm_conductivity=0.0;
+	LR->eno_ns_surfref=0.0;
+	LR->frq_mhz=0.0;
+	LR->radio_climate=0;
+	LR->pol=0;
+	LR->conf=0.0;
+	LR->rel=0.0;
+	LR->erp=0.0;
 
 	/* Generate .lrp filename from txsite filename. */
 
@@ -2519,7 +2412,7 @@ char ReadLRParm(struct site txsite, char forced_read)
 
 		if (ok)
 		{
-			LR.eps_dielect=din;
+			LR->eps_dielect=din;
 
 			fgets(string,80,fd);
 
@@ -2533,7 +2426,7 @@ char ReadLRParm(struct site txsite, char forced_read)
 
 		if (ok)
 		{
-			LR.sgm_conductivity=din;
+			LR->sgm_conductivity=din;
 
 			fgets(string,80,fd);
 
@@ -2547,7 +2440,7 @@ char ReadLRParm(struct site txsite, char forced_read)
 
 		if (ok)
 		{
-			LR.eno_ns_surfref=din;
+			LR->eno_ns_surfref=din;
 
 			fgets(string,80,fd);
 
@@ -2561,7 +2454,7 @@ char ReadLRParm(struct site txsite, char forced_read)
 
 		if (ok)
 		{
-			LR.frq_mhz=din;
+			LR->frq_mhz=din;
 
 			fgets(string,80,fd);
 
@@ -2575,7 +2468,7 @@ char ReadLRParm(struct site txsite, char forced_read)
 
 		if (ok)
 		{
-			LR.radio_climate=iin;
+			LR->radio_climate=iin;
 
 			fgets(string,80,fd);
 
@@ -2589,7 +2482,7 @@ char ReadLRParm(struct site txsite, char forced_read)
 
 		if (ok)
 		{
-			LR.pol=iin;
+			LR->pol=iin;
 
 			fgets(string,80,fd);
 
@@ -2603,7 +2496,7 @@ char ReadLRParm(struct site txsite, char forced_read)
 
 		if (ok)
 		{
-			LR.conf=din;
+			LR->conf=din;
 
 			fgets(string,80,fd);
 
@@ -2617,7 +2510,7 @@ char ReadLRParm(struct site txsite, char forced_read)
 
 		if (ok)
 		{
-			LR.rel=din;
+			LR->rel=din;
 			din=0.0;
 			return_value=1;
 
@@ -2629,7 +2522,7 @@ char ReadLRParm(struct site txsite, char forced_read)
 					*pointer=0;
 
 				if (sscanf(string,"%lf", &din))
-					LR.erp=din;
+					LR->erp=din;
 
 				/* ERP in SPLAT! is referenced to 1 Watt
 				   into a dipole (0 dBd).  If ERP is
@@ -2638,17 +2531,17 @@ char ReadLRParm(struct site txsite, char forced_read)
 				   to ERP.  */
 
 				if ((strstr(string, "dBm")!=NULL) || (strstr(string,"dbm")!=NULL))
-					LR.erp=(pow(10.0,(LR.erp-32.14)/10.0));
+					LR->erp=(pow(10.0,(LR->erp-32.14)/10.0));
 			}
 		}
 
 		fclose(fd);
 
 		if (forced_erp!=-1.0)
-			LR.erp=forced_erp;
+			LR->erp=forced_erp;
 
 		if (forced_freq>=20.0 && forced_freq<=20000.0)
-			LR.frq_mhz=forced_freq;
+			LR->frq_mhz=forced_freq;
 
 		if (ok)
 			LoadPAT(filename);
@@ -2659,29 +2552,29 @@ char ReadLRParm(struct site txsite, char forced_read)
 		/* Assign some default parameters
 		   for use in this run. */
 
-		LR.eps_dielect=15.0;
-		LR.sgm_conductivity=0.005;
-		LR.eno_ns_surfref=301.0;
-		LR.frq_mhz=300.0;
-		LR.radio_climate=5;
-		LR.pol=0;
-		LR.conf=0.50;
-		LR.rel=0.50;
-		LR.erp=0.0;
+		LR->eps_dielect=15.0;
+		LR->sgm_conductivity=0.005;
+		LR->eno_ns_surfref=301.0;
+		LR->frq_mhz=300.0;
+		LR->radio_climate=5;
+		LR->pol=0;
+		LR->conf=0.50;
+		LR->rel=0.50;
+		LR->erp=0.0;
 
 		/* Write them to a "splat.lrp" file. */
 
 		outfile=fopen("splat.lrp","w");
 
-		fprintf(outfile,"%.3f\t; Earth Dielectric Constant (Relative permittivity)\n",LR.eps_dielect);
-		fprintf(outfile,"%.3f\t; Earth Conductivity (Siemens per meter)\n", LR.sgm_conductivity);
-		fprintf(outfile,"%.3f\t; Atmospheric Bending Constant (N-Units)\n",LR.eno_ns_surfref);
-		fprintf(outfile,"%.3f\t; Frequency in MHz (20 MHz to 20 GHz)\n", LR.frq_mhz);
-		fprintf(outfile,"%d\t; Radio Climate\n",LR.radio_climate);
-		fprintf(outfile,"%d\t; Polarization (0 = Horizontal, 1 = Vertical)\n", LR.pol);
-		fprintf(outfile,"%.2f\t; Fraction of Situations\n",LR.conf);
-		fprintf(outfile,"%.2f\t; Fraction of Time\n",LR.rel);
-		fprintf(outfile,"%.2f\t; Transmitter Effective Radiated Power in Watts or dBm (optional)\n",LR.erp);
+		fprintf(outfile,"%.3f\t; Earth Dielectric Constant (Relative permittivity)\n",LR->eps_dielect);
+		fprintf(outfile,"%.3f\t; Earth Conductivity (Siemens per meter)\n", LR->sgm_conductivity);
+		fprintf(outfile,"%.3f\t; Atmospheric Bending Constant (N-Units)\n",LR->eno_ns_surfref);
+		fprintf(outfile,"%.3f\t; Frequency in MHz (20 MHz to 20 GHz)\n", LR->frq_mhz);
+		fprintf(outfile,"%d\t; Radio Climate\n",LR->radio_climate);
+		fprintf(outfile,"%d\t; Polarization (0 = Horizontal, 1 = Vertical)\n", LR->pol);
+		fprintf(outfile,"%.2f\t; Fraction of Situations\n",LR->conf);
+		fprintf(outfile,"%.2f\t; Fraction of Time\n",LR->rel);
+		fprintf(outfile,"%.2f\t; Transmitter Effective Radiated Power in Watts or dBm (optional)\n",LR->erp);
 		fprintf(outfile,"\nPlease consult SPLAT! documentation for the meaning and use of this data.\n");
 
 		fclose(outfile);
@@ -2696,15 +2589,15 @@ char ReadLRParm(struct site txsite, char forced_read)
 
 	if (forced_read && (fd==NULL || ok==0))
 	{
-		LR.eps_dielect=15.0;
-		LR.sgm_conductivity=0.005;
-		LR.eno_ns_surfref=301.0;
-		LR.frq_mhz=300.0;
-		LR.radio_climate=5;
-		LR.pol=0;
-		LR.conf=0.50;
-		LR.rel=0.50;
-		LR.erp=0.0;
+		LR->eps_dielect=15.0;
+		LR->sgm_conductivity=0.005;
+		LR->eno_ns_surfref=301.0;
+		LR->frq_mhz=300.0;
+		LR->radio_climate=5;
+		LR->pol=0;
+		LR->conf=0.50;
+		LR->rel=0.50;
+		LR->erp=0.0;
 
 		fprintf(stderr,"Default parameters have been assumed for this analysis.\n");
 
@@ -2714,7 +2607,7 @@ char ReadLRParm(struct site txsite, char forced_read)
 	return (return_value);
 }
 
-void PlotPath(struct site source, struct site destination, char mask_value)
+void PlotPath(struct site source, struct site destination, char mask_value, dem dem[])
 {
 	/* This function analyzes the path between the source and
 	   destination locations.  It determines which points along
@@ -2727,21 +2620,21 @@ void PlotPath(struct site source, struct site destination, char mask_value)
 
 	char block;
 	int x, y;
-	register double cos_xmtr_angle, cos_test_angle, test_alt;
+	double cos_xmtr_angle, cos_test_angle, test_alt;
 	double distance, rx_alt, tx_alt;
 
-	ReadPath(source,destination);
+	ReadPath(source,destination,dem);
 
-	for (y=0; y<path.length; y++)
+	for (y=0; y<path->length; y++)
 	{
 		/* Test this point only if it hasn't been already
 		   tested and found to be free of obstructions. */
 
-		if ((GetMask(path.lat[y],path.lon[y])&mask_value)==0)
+		if ((GetMask(path->lat[y],path->lon[y],dem)&mask_value)==0)
 		{
-			distance=5280.0*path.distance[y];
-			tx_alt=earthradius+source.alt+path.elevation[0];
-			rx_alt=earthradius+destination.alt+path.elevation[y];
+			distance=5280.0*path->distance[y];
+			tx_alt=earthradius+source.alt+path->elevation[0];
+			rx_alt=earthradius+destination.alt+path->elevation[y];
 
 			/* Calculate the cosine of the elevation of the
 			   transmitter as seen at the temp rx point. */
@@ -2750,8 +2643,8 @@ void PlotPath(struct site source, struct site destination, char mask_value)
 
 			for (x=y, block=0; x>=0 && block==0; x--)
 			{
-				distance=5280.0*(path.distance[y]-path.distance[x]);
-				test_alt=earthradius+(path.elevation[x]==0.0?path.elevation[x]:path.elevation[x]+clutter);
+				distance=5280.0*(path->distance[y]-path->distance[x]);
+				test_alt=earthradius+(path->elevation[x]==0.0?path->elevation[x]:path->elevation[x]+clutter);
 
 				cos_test_angle=((rx_alt*rx_alt)+(distance*distance)-(test_alt*test_alt))/(2.0*rx_alt*distance);
 
@@ -2767,12 +2660,12 @@ void PlotPath(struct site source, struct site destination, char mask_value)
 			}
 
 			if (block==0)
-				OrMask(path.lat[y],path.lon[y],mask_value);
+				OrMask(path->lat[y],path->lon[y],mask_value,dem);
 		}
 	}
 }
 
-void PlotLRPath(struct site source, struct site destination, unsigned char mask_value, FILE *fd)
+void PlotLRPath(struct site source, struct site destination, unsigned char mask_value, FILE *fd, double elev[], dem dem[])
 {
 	/* This function plots the RF path loss between source and
 	   destination points based on the ITWOM propagation model,
@@ -2787,19 +2680,19 @@ void PlotLRPath(struct site source, struct site destination, unsigned char mask_
 		field_strength=0.0;
 	struct	site temp;
 
-	ReadPath(source,destination);
+	ReadPath(source,destination, dem);
 
 	four_thirds_earth=FOUR_THIRDS*EARTHRADIUS;
 
 	/* Copy elevations plus clutter along path into the elev[] array. */
 
-	for (x=1; x<path.length-1; x++)
-		elev[x+2]=(path.elevation[x]==0.0?path.elevation[x]*METERS_PER_FOOT:(clutter+path.elevation[x])*METERS_PER_FOOT);
+	for (x=1; x<path->length-1; x++)
+		elev[x+2]=(path->elevation[x]==0.0?path->elevation[x]*METERS_PER_FOOT:(clutter+path->elevation[x])*METERS_PER_FOOT);
 
 	/* Copy ending points without clutter */
 
-	elev[2]=path.elevation[0]*METERS_PER_FOOT;
-	elev[path.length+1]=path.elevation[path.length-1]*METERS_PER_FOOT;
+	elev[2]=path->elevation[0]*METERS_PER_FOOT;
+	elev[path->length+1]=path->elevation[path->length-1]*METERS_PER_FOOT;
 
 	/* Since the only energy the propagation model considers
 	   reaching the destination is based on what is scattered
@@ -2811,16 +2704,16 @@ void PlotLRPath(struct site source, struct site destination, unsigned char mask_
 	   is required for properly integrating the antenna's elevation
 	   pattern into the calculation for overall path loss. */
 
-	for (y=2; (y<(path.length-1) && path.distance[y]<=max_range); y++)
+	for (y=2; (y<(path->length-1) && path->distance[y]<=max_range); y++)
 	{
 		/* Process this point only if it
 		   has not already been processed. */
 
-		if ((GetMask(path.lat[y],path.lon[y])&248)!=(mask_value<<3))
+		if ((GetMask(path->lat[y],path->lon[y],dem)&248)!=(mask_value<<3))
 		{
-			distance=5280.0*path.distance[y];
-			xmtr_alt=four_thirds_earth+source.alt+path.elevation[0];
-			dest_alt=four_thirds_earth+destination.alt+path.elevation[y];
+			distance=5280.0*path->distance[y];
+			xmtr_alt=four_thirds_earth+source.alt+path->elevation[0];
+			dest_alt=four_thirds_earth+destination.alt+path->elevation[y];
 			dest_alt2=dest_alt*dest_alt;
 			xmtr_alt2=xmtr_alt*xmtr_alt;
 
@@ -2843,9 +2736,9 @@ void PlotLRPath(struct site source, struct site destination, unsigned char mask_
 
 				for (x=2, block=0; (x<y && block==0); x++)
 				{
-					distance=5280.0*path.distance[x];
+					distance=5280.0*path->distance[x];
 
-					test_alt=four_thirds_earth+(path.elevation[x]==0.0?path.elevation[x]:path.elevation[x]+clutter);
+					test_alt=four_thirds_earth+(path->elevation[x]==0.0?path->elevation[x]:path->elevation[x]+clutter);
 
 					/* Calculate the cosine of the elevation
 					   angle of the terrain (test point)
@@ -2887,35 +2780,35 @@ void PlotLRPath(struct site source, struct site destination, unsigned char mask_
 
 			/* Distance between elevation samples */
 
-			elev[1]=METERS_PER_MILE*(path.distance[y]-path.distance[y-1]);
+			elev[1]=METERS_PER_MILE*(path->distance[y]-path->distance[y-1]);
 
 			if (olditm)
 				point_to_point_ITM(elev,source.alt*METERS_PER_FOOT, 
-  		 		destination.alt*METERS_PER_FOOT, LR.eps_dielect,
-				LR.sgm_conductivity, LR.eno_ns_surfref, LR.frq_mhz,
-				LR.radio_climate, LR.pol, LR.conf, LR.rel, loss,
+  		 		destination.alt*METERS_PER_FOOT, LR->eps_dielect,
+				LR->sgm_conductivity, LR->eno_ns_surfref, LR->frq_mhz,
+				LR->radio_climate, LR->pol, LR->conf, LR->rel, loss,
 				strmode, errnum);
 
 			else
 				point_to_point(elev,source.alt*METERS_PER_FOOT, 
-  	 			destination.alt*METERS_PER_FOOT, LR.eps_dielect,
-				LR.sgm_conductivity, LR.eno_ns_surfref, LR.frq_mhz,
-				LR.radio_climate, LR.pol, LR.conf, LR.rel, loss,
+  	 			destination.alt*METERS_PER_FOOT, LR->eps_dielect,
+				LR->sgm_conductivity, LR->eno_ns_surfref, LR->frq_mhz,
+				LR->radio_climate, LR->pol, LR->conf, LR->rel, loss,
 				strmode, errnum);
 
-			temp.lat=path.lat[y];
-			temp.lon=path.lon[y];
+			temp.lat=path->lat[y];
+			temp.lon=path->lon[y];
 
 			azimuth=(Azimuth(source,temp));
 
 			if (fd!=NULL)
-				fprintf(fd,"%.7f, %.7f, %.3f, %.3f, ",path.lat[y], path.lon[y], azimuth, elevation);
+				fprintf(fd,"%.7f, %.7f, %.3f, %.3f, ",path->lat[y], path->lon[y], azimuth, elevation);
 
 			/* If ERP==0, write path loss to alphanumeric
 			   output file.  Otherwise, write field strength
 			   or received power level (below), as appropriate. */
 
-			if (fd!=NULL && LR.erp==0.0)
+			if (fd!=NULL && LR->erp==0.0)
 				fprintf(fd,"%.2f",loss);
 
 			/* Integrate the antenna's radiation
@@ -2927,7 +2820,7 @@ void PlotLRPath(struct site source, struct site destination, unsigned char mask_
 			{
 				azimuth=rint(azimuth);
 
-				pattern=(double)LR.antenna_pattern[(int)azimuth][x];
+				pattern=(double)LR->antenna_pattern[(int)azimuth][x];
 
 				if (pattern!=0.0)
 				{
@@ -2936,13 +2829,13 @@ void PlotLRPath(struct site source, struct site destination, unsigned char mask_
 				}
 			}
 
-			if (LR.erp!=0.0)
+			if (LR->erp!=0.0)
 			{
 				if (dbm)
 				{
 					/* dBm is based on EIRP (ERP + 2.14) */
 
-					rxp=LR.erp/(pow(10.0,(loss-2.14)/10.0));
+					rxp=LR->erp/(pow(10.0,(loss-2.14)/10.0));
 
 					dBm=10.0*(log10(rxp*1000.0));
 
@@ -2959,17 +2852,17 @@ void PlotLRPath(struct site source, struct site destination, unsigned char mask_
 					if (ifs>255)
 						ifs=255;
 
-					ofs=GetSignal(path.lat[y],path.lon[y]);
+					ofs=GetSignal(path->lat[y],path->lon[y],dem);
 
 					if (ofs>ifs)
 						ifs=ofs;
 
-					PutSignal(path.lat[y],path.lon[y],(unsigned char)ifs);
+					PutSignal(path->lat[y],path->lon[y],(unsigned char)ifs,dem);
 				}
 
 				else
 				{
-					field_strength=(139.4+(20.0*log10(LR.frq_mhz))-loss)+(10.0*log10(LR.erp/1000.0));
+					field_strength=(139.4+(20.0*log10(LR->frq_mhz))-loss)+(10.0*log10(LR->erp/1000.0));
 
 					ifs=100+(int)rint(field_strength);
 
@@ -2979,12 +2872,12 @@ void PlotLRPath(struct site source, struct site destination, unsigned char mask_
 					if (ifs>255)
 						ifs=255;
 
-					ofs=GetSignal(path.lat[y],path.lon[y]);
+					ofs=GetSignal(path->lat[y],path->lon[y],dem);
 
 					if (ofs>ifs)
 						ifs=ofs;
 
-					PutSignal(path.lat[y],path.lon[y],(unsigned char)ifs);
+					PutSignal(path->lat[y],path->lon[y],(unsigned char)ifs,dem);
 	
 					if (fd!=NULL)
 						fprintf(fd,"%.3f",field_strength);
@@ -2998,12 +2891,12 @@ void PlotLRPath(struct site source, struct site destination, unsigned char mask_
 				else
 					ifs=(int)rint(loss);
 
-				ofs=GetSignal(path.lat[y],path.lon[y]);
+				ofs=GetSignal(path->lat[y],path->lon[y],dem);
 
 				if (ofs<ifs && ofs!=0)
 					ifs=ofs;
 
-				PutSignal(path.lat[y],path.lon[y],(unsigned char)ifs);
+				PutSignal(path->lat[y],path->lon[y],(unsigned char)ifs,dem);
 			}
 
 			if (fd!=NULL)
@@ -3016,12 +2909,12 @@ void PlotLRPath(struct site source, struct site destination, unsigned char mask_
 
 			/* Mark this point as having been analyzed */
 
-			PutMask(path.lat[y],path.lon[y],(GetMask(path.lat[y],path.lon[y])&7)+(mask_value<<3));
+			PutMask(path->lat[y],path->lon[y],(GetMask(path->lat[y],path->lon[y],dem)&7)+(mask_value<<3),dem);
 		}
 	}
 }
 
-void PlotLOSMap(struct site source, double altitude)
+void PlotLOSMap(struct site source, double altitude,dem dem[])
 {
 	/* This function performs a 360 degree sweep around the
 	   transmitter site (source location), and plots the
@@ -3072,7 +2965,7 @@ void PlotLOSMap(struct site source, double altitude)
 		edge.lon=lon;
 		edge.alt=altitude;
 
-		PlotPath(source,edge,mask_value);
+		PlotPath(source,edge,mask_value,dem);
 		count++;
 
 		if (count==z) 
@@ -3100,7 +2993,7 @@ void PlotLOSMap(struct site source, double altitude)
 		edge.lon=min_west;
 		edge.alt=altitude;
 
-		PlotPath(source,edge,mask_value);
+		PlotPath(source,edge,mask_value,dem);
 		count++;
 
 		if (count==z) 
@@ -3131,7 +3024,7 @@ void PlotLOSMap(struct site source, double altitude)
 		edge.lon=lon;
 		edge.alt=altitude;
 
-		PlotPath(source,edge,mask_value);
+		PlotPath(source,edge,mask_value,dem);
 		count++;
 
 		if (count==z)
@@ -3159,7 +3052,7 @@ void PlotLOSMap(struct site source, double altitude)
 		edge.lon=max_west;
 		edge.alt=altitude;
 
-		PlotPath(source,edge,mask_value);
+		PlotPath(source,edge,mask_value,dem);
 		count++;
 
 		if (count==z)
@@ -3195,7 +3088,7 @@ void PlotLOSMap(struct site source, double altitude)
 	}
 }
 
-void PlotLRMap(struct site source, double altitude, char *plo_filename)
+void PlotLRMap(struct site source, double altitude, char *plo_filename, double elev[], dem dem[])
 {
 	/* This function performs a 360 degree sweep around the
 	   transmitter site (source location), and plots the
@@ -3228,7 +3121,7 @@ void PlotLRMap(struct site source, double altitude, char *plo_filename)
 	else
 		fprintf(stdout,"\nComputing ITWOM ");
 
-	if (LR.erp==0.0)
+	if (LR->erp==0.0)
 		fprintf(stdout,"path loss");
 	else
 	{
@@ -3272,7 +3165,7 @@ void PlotLRMap(struct site source, double altitude, char *plo_filename)
 		edge.lon=lon;
 		edge.alt=altitude;
 
-		PlotLRPath(source,edge,mask_value,fd);
+		PlotLRPath(source,edge,mask_value,fd,elev,dem);
 		count++;
 
 		if (count==z) 
@@ -3300,7 +3193,7 @@ void PlotLRMap(struct site source, double altitude, char *plo_filename)
 		edge.lon=min_west;
 		edge.alt=altitude;
 
-		PlotLRPath(source,edge,mask_value,fd);
+		PlotLRPath(source,edge,mask_value,fd,elev,dem);
 		count++;
 
 		if (count==z) 
@@ -3331,7 +3224,7 @@ void PlotLRMap(struct site source, double altitude, char *plo_filename)
 		edge.lon=lon;
 		edge.alt=altitude;
 
-		PlotLRPath(source,edge,mask_value,fd);
+		PlotLRPath(source,edge,mask_value,fd,elev,dem);
 		count++;
 
 		if (count==z)
@@ -3359,7 +3252,7 @@ void PlotLRMap(struct site source, double altitude, char *plo_filename)
 		edge.lon=max_west;
 		edge.alt=altitude;
 
-		PlotLRPath(source,edge,mask_value,fd);
+		PlotLRPath(source,edge,mask_value,fd,elev,dem);
 		count++;
 
 		if (count==z)
@@ -3869,7 +3762,7 @@ void LoadDBMColors(struct site xmtr)
 	}
 }
 
-void WritePPM(char *filename, unsigned char geo, unsigned char kml, unsigned char ngs, struct site *xmtr, unsigned char txsites)
+void WritePPM(char *filename, unsigned char geo, unsigned char kml, unsigned char ngs, struct site *xmtr, unsigned char txsites, dem dem[])
 {
 	/* This function generates a topographic map in Portable Pix Map
 	   (PPM) format based on logarithmically scaled topology data,
@@ -3881,7 +3774,7 @@ void WritePPM(char *filename, unsigned char geo, unsigned char kml, unsigned cha
 	char mapfile[255], geofile[255], kmlfile[255];
 	unsigned char found, mask;
 	unsigned width, height, terrain;
-	int indx, x, y, x0=0, y0=0;
+	int indx, x, x0=0, y0=0;
 	double lat, lon, conversion, one_over_gamma,
 	north, south, east, west, minwest;
 	FILE *fd;
@@ -3898,7 +3791,7 @@ void WritePPM(char *filename, unsigned char geo, unsigned char kml, unsigned cha
 		filename[strlen(filename)-4]=0;  /* Remove .qth */
 	}
 
-	y=strlen(filename);
+	size_t y = strlen(filename);
 
 	if (y>4)
 	{
@@ -4154,7 +4047,7 @@ void WritePPM(char *filename, unsigned char geo, unsigned char kml, unsigned cha
 	fflush(stdout);
 }
 
-void WritePPMLR(char *filename, unsigned char geo, unsigned char kml, unsigned char ngs, struct site *xmtr, unsigned char txsites)
+void WritePPMLR(char *filename, unsigned char geo, unsigned char kml, unsigned char ngs, struct site *xmtr, unsigned char txsites, dem dem[])
 {
 	/* This function generates a topographic map in Portable Pix Map
 	   (PPM) format based on the content of flags held in the mask[][] 
@@ -4165,7 +4058,7 @@ void WritePPMLR(char *filename, unsigned char geo, unsigned char kml, unsigned c
 	char mapfile[255], geofile[255], kmlfile[255],  ckfile[255];
 	unsigned width, height, red, green, blue, terrain=0;
 	unsigned char found, mask, cityorcounty; 
-	int indx, x, y, z, colorwidth, x0, y0, loss, level,
+	int indx, x, z, colorwidth, x0 = 0, y0 = 0, loss, level,
 	    hundreds, tens, units, match;
 	double lat, lon, conversion, one_over_gamma,
 	north, south, east, west, minwest;
@@ -4185,7 +4078,7 @@ void WritePPMLR(char *filename, unsigned char geo, unsigned char kml, unsigned c
 		filename[strlen(filename)-4]=0;  /* Remove .qth */
 	}
 
-	y=strlen(filename);
+	size_t y = strlen(filename);
 
 	if (y>240)
 		y=240;
@@ -4633,7 +4526,7 @@ void WritePPMLR(char *filename, unsigned char geo, unsigned char kml, unsigned c
 	fflush(stdout);
 }
 
-void WritePPMSS(char *filename, unsigned char geo, unsigned char kml, unsigned char ngs, struct site *xmtr, unsigned char txsites)
+void WritePPMSS(char *filename, unsigned char geo, unsigned char kml, unsigned char ngs, struct site *xmtr, unsigned char txsites, dem dem[])
 {
 	/* This function generates a topographic map in Portable Pix Map
 	   (PPM) format based on the signal strength values held in the
@@ -4644,7 +4537,7 @@ void WritePPMSS(char *filename, unsigned char geo, unsigned char kml, unsigned c
 	char mapfile[255], geofile[255], kmlfile[255], ckfile[255];
 	unsigned width, height, terrain, red, green, blue;
 	unsigned char found, mask, cityorcounty;
-	int indx, x, y, z=1, x0, y0, signal, level, hundreds,
+	int indx, x, z=1, x0 = 0, y0 = 0, signal, level, hundreds,
 	    tens, units, match, colorwidth;
 	double conversion, one_over_gamma, lat, lon,
 	north, south, east, west, minwest;
@@ -4664,7 +4557,7 @@ void WritePPMSS(char *filename, unsigned char geo, unsigned char kml, unsigned c
 		filename[strlen(filename)-4]=0;  /* Remove .qth */
 	}
 
-	y=strlen(filename);
+	size_t y = strlen(filename);
 
 	if (y>240)
 		y=240;
@@ -5147,7 +5040,7 @@ void WritePPMSS(char *filename, unsigned char geo, unsigned char kml, unsigned c
 	fflush(stdout);
 }
 
-void WritePPMDBM(char *filename, unsigned char geo, unsigned char kml, unsigned char ngs, struct site *xmtr, unsigned char txsites)
+void WritePPMDBM(char *filename, unsigned char geo, unsigned char kml, unsigned char ngs, struct site *xmtr, unsigned char txsites, dem dem[])
 {
 	/* This function generates a topographic map in Portable Pix Map
 	   (PPM) format based on the signal power level values held in the
@@ -5158,7 +5051,7 @@ void WritePPMDBM(char *filename, unsigned char geo, unsigned char kml, unsigned 
 	char mapfile[255], geofile[255], kmlfile[255], ckfile[255];
 	unsigned width, height, terrain, red, green, blue;
 	unsigned char found, mask, cityorcounty;
-	int indx, x, y, z=1, x0, y0, dBm, level, hundreds,
+	int indx, x, z=1, x0 = 0, y0 = 0, dBm, level, hundreds,
 	    tens, units, match, colorwidth;
 	double conversion, one_over_gamma, lat, lon,
 	north, south, east, west, minwest;
@@ -5178,7 +5071,7 @@ void WritePPMDBM(char *filename, unsigned char geo, unsigned char kml, unsigned 
 		filename[strlen(filename)-4]=0;  /* Remove .qth */
 	}
 
-	y=strlen(filename);
+	size_t y = strlen(filename);
 
 	if (y>240)
 		y=240;
@@ -5737,7 +5630,7 @@ void WritePPMDBM(char *filename, unsigned char geo, unsigned char kml, unsigned 
 	fflush(stdout);
 }
 
-void GraphTerrain(struct site source, struct site destination, char *name)
+void GraphTerrain(struct site source, struct site destination, char *name,dem dem[])
 {
 	/* This function invokes gnuplot to generate an appropriate
 	   output file indicating the terrain profile between the source
@@ -5747,40 +5640,40 @@ void GraphTerrain(struct site source, struct site destination, char *name)
 	   to set gnuplot's terminal setting and output file type.
 	   If no extension is found, .png is assumed.  */
 
-	int	x, y, z;
+	int	x, z;
 	char	basename[255], term[30], ext[15];
 	double	minheight=100000.0, maxheight=-100000.0;
 	FILE	*fd=NULL, *fd1=NULL;
 
-	ReadPath(destination,source);
+	ReadPath(destination,source,dem);
 
 	fd=fopen("profile.gp","wb");
 
 	if (clutter>0.0)
 		fd1=fopen("clutter.gp","wb");
 
-	for (x=0; x<path.length; x++)
+	for (x=0; x<path->length; x++)
 	{
-		if ((path.elevation[x]+clutter)>maxheight)
-			maxheight=path.elevation[x]+clutter;
+		if ((path->elevation[x]+clutter)>maxheight)
+			maxheight=path->elevation[x]+clutter;
 
-		if (path.elevation[x]<minheight)
-			minheight=path.elevation[x];
+		if (path->elevation[x]<minheight)
+			minheight=path->elevation[x];
 
 		if (metric)
 		{
-			fprintf(fd,"%f\t%f\n",KM_PER_MILE*path.distance[x],METERS_PER_FOOT*path.elevation[x]);
+			fprintf(fd,"%f\t%f\n",KM_PER_MILE*path->distance[x],METERS_PER_FOOT*path->elevation[x]);
 
-			if (fd1!=NULL && x>0 && x<path.length-2)
-				fprintf(fd1,"%f\t%f\n",KM_PER_MILE*path.distance[x],METERS_PER_FOOT*(path.elevation[x]==0.0?path.elevation[x]:(path.elevation[x]+clutter)));
+			if (fd1!=NULL && x>0 && x<path->length-2)
+				fprintf(fd1,"%f\t%f\n",KM_PER_MILE*path->distance[x],METERS_PER_FOOT*(path->elevation[x]==0.0?path->elevation[x]:(path->elevation[x]+clutter)));
 		}
 
 		else
 		{
-			fprintf(fd,"%f\t%f\n",path.distance[x],path.elevation[x]);
+			fprintf(fd,"%f\t%f\n",path->distance[x],path->elevation[x]);
 
-			if (fd1!=NULL && x>0 && x<path.length-2)
-				fprintf(fd1,"%f\t%f\n",path.distance[x],(path.elevation[x]==0.0?path.elevation[x]:(path.elevation[x]+clutter)));
+			if (fd1!=NULL && x>0 && x<path->length-2)
+				fprintf(fd1,"%f\t%f\n",path->distance[x],(path->elevation[x]==0.0?path->elevation[x]:(path->elevation[x]+clutter)));
 		}
 	}
 
@@ -5803,10 +5696,10 @@ void GraphTerrain(struct site source, struct site destination, char *name)
 		/* Extract extension and terminal type from "name" */
 
 		ext[0]=0;
-		y=strlen(name);
+		size_t y = strlen(name);
 		strncpy(basename,name,254);
 
-		for (x=y-1; x>0 && name[x]!='.'; x--);
+		for (x=(int) y - 1; x>0 && name[x]!='.'; x--);
 
 		if (x>0)  /* Extension found */
 		{
@@ -5898,7 +5791,7 @@ void GraphTerrain(struct site source, struct site destination, char *name)
 		fprintf(stderr,"\n*** ERROR: Error occurred invoking gnuplot!\n");
 }
 
-void GraphElevation(struct site source, struct site destination, char *name)
+void GraphElevation(struct site source, struct site destination, char *name, dem dem[])
 {
 	/* This function invokes gnuplot to generate an appropriate
 	   output file indicating the terrain elevation profile between
@@ -5908,15 +5801,15 @@ void GraphElevation(struct site source, struct site destination, char *name)
 	   to set gnuplot's terminal setting and output file type.
 	   If no extension is found, .png is assumed.  */
 
-	int	x, y, z;
+	int	x, z;
 	char	basename[255], term[30], ext[15];
 	double	angle, clutter_angle=0.0, refangle, maxangle=-90.0,
 	       	minangle=90.0, distance;
 	struct	site remote, remote2;
 	FILE	*fd=NULL, *fd1=NULL, *fd2=NULL;
 
-	ReadPath(destination,source);  /* destination=RX, source=TX */
-	refangle=ElevationAngle(destination,source);
+	ReadPath(destination,source,dem);  /* destination=RX, source=TX */
+	refangle=ElevationAngle(destination,source,dem);
 	distance=Distance(source,destination);
 
 	fd=fopen("profile.gp","wb");
@@ -5926,44 +5819,44 @@ void GraphElevation(struct site source, struct site destination, char *name)
 
 	fd2=fopen("reference.gp","wb");
 
-	for (x=1; x<path.length-1; x++)
+	for (x=1; x<path->length-1; x++)
 	{
-		remote.lat=path.lat[x];
-		remote.lon=path.lon[x];
+		remote.lat=path->lat[x];
+		remote.lon=path->lon[x];
 		remote.alt=0.0;
-		angle=ElevationAngle(destination,remote);
+		angle=ElevationAngle(destination,remote,dem);
 
 		if (clutter>0.0)
 		{
-			remote2.lat=path.lat[x];
-			remote2.lon=path.lon[x];
+			remote2.lat=path->lat[x];
+			remote2.lon=path->lon[x];
 
-			if (path.elevation[x]!=0.0)
+			if (path->elevation[x]!=0.0)
 				remote2.alt=clutter;
 			else
 				remote2.alt=0.0;
 
-			clutter_angle=ElevationAngle(destination,remote2);
+			clutter_angle=ElevationAngle(destination,remote2,dem);
 		}
 
 		if (metric)
 		{
-			fprintf(fd,"%f\t%f\n",KM_PER_MILE*path.distance[x],angle);
+			fprintf(fd,"%f\t%f\n",KM_PER_MILE*path->distance[x],angle);
 
 			if (fd1!=NULL)
-				fprintf(fd1,"%f\t%f\n",KM_PER_MILE*path.distance[x],clutter_angle);
+				fprintf(fd1,"%f\t%f\n",KM_PER_MILE*path->distance[x],clutter_angle);
 
-			fprintf(fd2,"%f\t%f\n",KM_PER_MILE*path.distance[x],refangle);
+			fprintf(fd2,"%f\t%f\n",KM_PER_MILE*path->distance[x],refangle);
 		}
 
 		else
 		{
-			fprintf(fd,"%f\t%f\n",path.distance[x],angle);
+			fprintf(fd,"%f\t%f\n",path->distance[x],angle);
 
 			if (fd1!=NULL)
-				fprintf(fd1,"%f\t%f\n",path.distance[x],clutter_angle);
+				fprintf(fd1,"%f\t%f\n",path->distance[x],clutter_angle);
 
-			fprintf(fd2,"%f\t%f\n",path.distance[x],refangle);
+			fprintf(fd2,"%f\t%f\n",path->distance[x],refangle);
 		}
 
 		if (angle>maxangle)
@@ -5978,14 +5871,14 @@ void GraphElevation(struct site source, struct site destination, char *name)
 
 	if (metric)
 	{
-		fprintf(fd,"%f\t%f\n",KM_PER_MILE*path.distance[path.length-1],refangle);
-		fprintf(fd2,"%f\t%f\n",KM_PER_MILE*path.distance[path.length-1],refangle);
+		fprintf(fd,"%f\t%f\n",KM_PER_MILE*path->distance[path->length-1],refangle);
+		fprintf(fd2,"%f\t%f\n",KM_PER_MILE*path->distance[path->length-1],refangle);
 	}
 
 	else
 	{
-		fprintf(fd,"%f\t%f\n",path.distance[path.length-1],refangle);
-		fprintf(fd2,"%f\t%f\n",path.distance[path.length-1],refangle);
+		fprintf(fd,"%f\t%f\n",path->distance[path->length-1],refangle);
+		fprintf(fd2,"%f\t%f\n",path->distance[path->length-1],refangle);
 	}
 
 	fclose(fd);
@@ -6009,10 +5902,10 @@ void GraphElevation(struct site source, struct site destination, char *name)
 		/* Extract extension and terminal type from "name" */
 
 		ext[0]=0;
-		y=strlen(name);
+		size_t y = strlen(name);
 		strncpy(basename,name,254);
 
-		for (x=y-1; x>0 && name[x]!='.'; x--);
+		for (x = (int) y - 1; x>0 && name[x]!='.'; x--);
 
 		if (x>0)  /* Extension found */
 		{
@@ -6100,7 +5993,7 @@ void GraphElevation(struct site source, struct site destination, char *name)
 		fprintf(stderr,"\n*** ERROR: Error occurred invoking gnuplot!\n");
 }
 
-void GraphHeight(struct site source, struct site destination, char *name, unsigned char fresnel_plot, unsigned char normalized)
+void GraphHeight(struct site source, struct site destination, char *name, unsigned char fresnel_plot, unsigned char normalized,dem dem[])
 {
 	/* This function invokes gnuplot to generate an appropriate
 	   output file indicating the terrain height profile between
@@ -6112,7 +6005,7 @@ void GraphHeight(struct site source, struct site destination, char *name, unsign
 	   setting and output file type.  If no extension is found,
 	   .png is assumed.  */
 
-	int	x, y, z;
+	int	x, z;
 	char	basename[255], term[30], ext[15];
 	double	a, b, c, height=0.0, refangle, cangle, maxheight=-100000.0,
 		minheight=100000.0, lambda=0.0, f_zone=0.0, fpt6_zone=0.0,
@@ -6122,26 +6015,26 @@ void GraphHeight(struct site source, struct site destination, char *name, unsign
 	struct	site remote;
 	FILE	*fd=NULL, *fd1=NULL, *fd2=NULL, *fd3=NULL, *fd4=NULL, *fd5=NULL;
 
-	ReadPath(destination,source);  /* destination=RX, source=TX */
+	ReadPath(destination,source,dem);  /* destination=RX, source=TX */
 	azimuth=Azimuth(destination,source);
 	distance=Distance(destination,source);
-	refangle=ElevationAngle(destination,source);
-	b=GetElevation(destination)+destination.alt+earthradius;
+	refangle=ElevationAngle(destination,source,dem);
+	b=GetElevation(destination,dem)+destination.alt+earthradius;
 
 	/* Wavelength and path distance (great circle) in feet. */
 
 	if (fresnel_plot)
 	{
-		lambda=9.8425e8/(LR.frq_mhz*1e6);
-		d=5280.0*path.distance[path.length-1];
+		lambda=9.8425e8/(LR->frq_mhz*1e6);
+		d=5280.0*path->distance[path->length-1];
 	}
 
 	if (normalized)
 	{
-		ed=GetElevation(destination);
-		es=GetElevation(source);
+		ed=GetElevation(destination,dem);
+		es=GetElevation(source,dem);
 		nb=-destination.alt-ed;
-		nm=(-source.alt-es-nb)/(path.distance[path.length-1]);
+		nm=(-source.alt-es-nb)/(path->distance[path->length-1]);
 	}
 
 	fd=fopen("profile.gp","wb");
@@ -6152,19 +6045,19 @@ void GraphHeight(struct site source, struct site destination, char *name, unsign
 	fd2=fopen("reference.gp","wb");
 	fd5=fopen("curvature.gp", "wb");
 
-	if ((LR.frq_mhz>=20.0) && (LR.frq_mhz<=20000.0) && fresnel_plot)
+	if ((LR->frq_mhz>=20.0) && (LR->frq_mhz<=20000.0) && fresnel_plot)
 	{
 		fd3=fopen("fresnel.gp", "wb");
 		fd4=fopen("fresnel_pt_6.gp", "wb");
 	}
 
-	for (x=0; x<path.length-1; x++)
+	for (x=0; x<path->length-1; x++)
 	{
-		remote.lat=path.lat[x];
-		remote.lon=path.lon[x];
+		remote.lat=path->lat[x];
+		remote.lon=path->lon[x];
 		remote.alt=0.0;
 
-		terrain=GetElevation(remote);
+		terrain=GetElevation(remote,dem);
 
 		if (x==0)
 			terrain+=destination.alt;  /* RX antenna spike */
@@ -6184,19 +6077,19 @@ void GraphHeight(struct site source, struct site destination, char *name, unsign
 		 * path to the first Fresnel zone boundary.
 		 */
 
-		if ((LR.frq_mhz>=20.0) && (LR.frq_mhz<=20000.0) && fresnel_plot)
+		if ((LR->frq_mhz>=20.0) && (LR->frq_mhz<=20000.0) && fresnel_plot)
 		{
-			d1=5280.0*path.distance[x];
+			d1=5280.0*path->distance[x];
 			f_zone=-1.0*sqrt(lambda*d1*(d-d1)/d);
 			fpt6_zone=f_zone*fzone_clearance;
 		}
 
 		if (normalized)
 		{
-			r=-(nm*path.distance[x])-nb;
+			r=-(nm*path->distance[x])-nb;
 			height+=r;
 
-			if ((LR.frq_mhz>=20.0) && (LR.frq_mhz<=20000.0) && fresnel_plot)
+			if ((LR->frq_mhz>=20.0) && (LR->frq_mhz<=20000.0) && fresnel_plot)
 			{
 				f_zone+=r;
 				fpt6_zone+=r;
@@ -6208,38 +6101,38 @@ void GraphHeight(struct site source, struct site destination, char *name, unsign
 
 		if (metric)
 		{
-			fprintf(fd,"%f\t%f\n",KM_PER_MILE*path.distance[x],METERS_PER_FOOT*height);
+			fprintf(fd,"%f\t%f\n",KM_PER_MILE*path->distance[x],METERS_PER_FOOT*height);
 
-			if (fd1!=NULL && x>0 && x<path.length-2)
-				fprintf(fd1,"%f\t%f\n",KM_PER_MILE*path.distance[x],METERS_PER_FOOT*(terrain==0.0?height:(height+clutter)));
+			if (fd1!=NULL && x>0 && x<path->length-2)
+				fprintf(fd1,"%f\t%f\n",KM_PER_MILE*path->distance[x],METERS_PER_FOOT*(terrain==0.0?height:(height+clutter)));
 
-			fprintf(fd2,"%f\t%f\n",KM_PER_MILE*path.distance[x],METERS_PER_FOOT*r);
-			fprintf(fd5,"%f\t%f\n",KM_PER_MILE*path.distance[x],METERS_PER_FOOT*(height-terrain));
+			fprintf(fd2,"%f\t%f\n",KM_PER_MILE*path->distance[x],METERS_PER_FOOT*r);
+			fprintf(fd5,"%f\t%f\n",KM_PER_MILE*path->distance[x],METERS_PER_FOOT*(height-terrain));
 		}
 
 		else
 		{
-			fprintf(fd,"%f\t%f\n",path.distance[x],height);
+			fprintf(fd,"%f\t%f\n",path->distance[x],height);
 
-			if (fd1!=NULL && x>0 && x<path.length-2)
-				fprintf(fd1,"%f\t%f\n",path.distance[x],(terrain==0.0?height:(height+clutter)));
+			if (fd1!=NULL && x>0 && x<path->length-2)
+				fprintf(fd1,"%f\t%f\n",path->distance[x],(terrain==0.0?height:(height+clutter)));
 
-			fprintf(fd2,"%f\t%f\n",path.distance[x],r);
-			fprintf(fd5,"%f\t%f\n",path.distance[x],height-terrain);
+			fprintf(fd2,"%f\t%f\n",path->distance[x],r);
+			fprintf(fd5,"%f\t%f\n",path->distance[x],height-terrain);
 		}
 
-		if ((LR.frq_mhz>=20.0) && (LR.frq_mhz<=20000.0) && fresnel_plot)
+		if ((LR->frq_mhz>=20.0) && (LR->frq_mhz<=20000.0) && fresnel_plot)
 		{
 			if (metric)
 			{
-				fprintf(fd3,"%f\t%f\n",KM_PER_MILE*path.distance[x],METERS_PER_FOOT*f_zone);
-				fprintf(fd4,"%f\t%f\n",KM_PER_MILE*path.distance[x],METERS_PER_FOOT*fpt6_zone);
+				fprintf(fd3,"%f\t%f\n",KM_PER_MILE*path->distance[x],METERS_PER_FOOT*f_zone);
+				fprintf(fd4,"%f\t%f\n",KM_PER_MILE*path->distance[x],METERS_PER_FOOT*fpt6_zone);
 			}
 
 			else
 			{
-				fprintf(fd3,"%f\t%f\n",path.distance[x],f_zone);
-				fprintf(fd4,"%f\t%f\n",path.distance[x],fpt6_zone);
+				fprintf(fd3,"%f\t%f\n",path->distance[x],f_zone);
+				fprintf(fd4,"%f\t%f\n",path->distance[x],fpt6_zone);
 			}
 
 			if (f_zone<minheight)
@@ -6263,34 +6156,34 @@ void GraphHeight(struct site source, struct site destination, char *name, unsign
 	}
 
 	if (normalized)
-		r=-(nm*path.distance[path.length-1])-nb;
+		r=-(nm*path->distance[path->length-1])-nb;
 	else
 		r=0.0;
 
 	if (metric)
 	{
-		fprintf(fd,"%f\t%f\n",KM_PER_MILE*path.distance[path.length-1],METERS_PER_FOOT*r);
-		fprintf(fd2,"%f\t%f\n",KM_PER_MILE*path.distance[path.length-1],METERS_PER_FOOT*r);
+		fprintf(fd,"%f\t%f\n",KM_PER_MILE*path->distance[path->length-1],METERS_PER_FOOT*r);
+		fprintf(fd2,"%f\t%f\n",KM_PER_MILE*path->distance[path->length-1],METERS_PER_FOOT*r);
 	}
 
 	else
 	{
-		fprintf(fd,"%f\t%f\n",path.distance[path.length-1],r);
-		fprintf(fd2,"%f\t%f\n",path.distance[path.length-1],r);
+		fprintf(fd,"%f\t%f\n",path->distance[path->length-1],r);
+		fprintf(fd2,"%f\t%f\n",path->distance[path->length-1],r);
 	}
 
-	if ((LR.frq_mhz>=20.0) && (LR.frq_mhz<=20000.0) && fresnel_plot)
+	if ((LR->frq_mhz>=20.0) && (LR->frq_mhz<=20000.0) && fresnel_plot)
 	{
 		if (metric)
 		{
-			fprintf(fd3,"%f\t%f\n",KM_PER_MILE*path.distance[path.length-1],METERS_PER_FOOT*r);
-			fprintf(fd4,"%f\t%f\n",KM_PER_MILE*path.distance[path.length-1],METERS_PER_FOOT*r);
+			fprintf(fd3,"%f\t%f\n",KM_PER_MILE*path->distance[path->length-1],METERS_PER_FOOT*r);
+			fprintf(fd4,"%f\t%f\n",KM_PER_MILE*path->distance[path->length-1],METERS_PER_FOOT*r);
 		}
 
 		else
 		{
-			fprintf(fd3,"%f\t%f\n",path.distance[path.length-1],r);
-			fprintf(fd4,"%f\t%f\n",path.distance[path.length-1],r);
+			fprintf(fd3,"%f\t%f\n",path->distance[path->length-1],r);
+			fprintf(fd4,"%f\t%f\n",path->distance[path->length-1],r);
 		}
 	}
 	
@@ -6308,7 +6201,7 @@ void GraphHeight(struct site source, struct site destination, char *name, unsign
 	fclose(fd2);
 	fclose(fd5);
 
-	if ((LR.frq_mhz>=20.0) && (LR.frq_mhz<=20000.0) && fresnel_plot)
+	if ((LR->frq_mhz>=20.0) && (LR->frq_mhz<=20000.0) && fresnel_plot)
 	{
 		fclose(fd3);
 		fclose(fd4);
@@ -6328,10 +6221,10 @@ void GraphHeight(struct site source, struct site destination, char *name, unsign
 		/* Extract extension and terminal type from "name" */
 
 		ext[0]=0;
-		y=strlen(name);
+		size_t y = strlen(name);
 		strncpy(basename,name,254);
 
-		for (x=y-1; x>0 && name[x]!='.'; x--);
+		for (x= (int) y - 1; x>0 && name[x]!='.'; x--);
 
 		if (x>0)  /* Extension found */
 		{
@@ -6389,7 +6282,7 @@ void GraphHeight(struct site source, struct site destination, char *name, unsign
 	fprintf(fd,"set encoding iso_8859_1\n");
 	fprintf(fd,"set term %s\n",term);
 
-	if ((LR.frq_mhz>=20.0) && (LR.frq_mhz<=20000.0) && fresnel_plot)
+	if ((LR->frq_mhz>=20.0) && (LR->frq_mhz<=20000.0) && fresnel_plot)
 		fprintf(fd,"set title \"%s Path Profile Between %s and %s (%.2f%c azimuth)\\nWith First Fresnel Zone\"\n",splat_name, destination.name, source.name, azimuth,176);
 
 	else
@@ -6421,18 +6314,18 @@ void GraphHeight(struct site source, struct site destination, char *name, unsign
 
 	fprintf(fd,"set output \"%s.%s\"\n",basename,ext);
 
-	if ((LR.frq_mhz>=20.0) && (LR.frq_mhz<=20000.0) && fresnel_plot)
+	if ((LR->frq_mhz>=20.0) && (LR->frq_mhz<=20000.0) && fresnel_plot)
 	{
 		if (clutter>0.0)
 		{
 			if (metric)
-				fprintf(fd,"plot \"profile.gp\" title \"Point-to-Point Profile\" with lines, \"clutter.gp\" title \"Ground Clutter (%.2f meters)\" with lines, \"reference.gp\" title \"Line of Sight Path\" with lines, \"curvature.gp\" axes x1y2 title \"Earth's Curvature Contour\" with lines, \"fresnel.gp\" axes x1y1 title \"First Fresnel Zone (%.3f MHz)\" with lines, \"fresnel_pt_6.gp\" title \"%.0f%% of First Fresnel Zone\" with lines\n",clutter*METERS_PER_FOOT,LR.frq_mhz,fzone_clearance*100.0);
+				fprintf(fd,"plot \"profile.gp\" title \"Point-to-Point Profile\" with lines, \"clutter.gp\" title \"Ground Clutter (%.2f meters)\" with lines, \"reference.gp\" title \"Line of Sight Path\" with lines, \"curvature.gp\" axes x1y2 title \"Earth's Curvature Contour\" with lines, \"fresnel.gp\" axes x1y1 title \"First Fresnel Zone (%.3f MHz)\" with lines, \"fresnel_pt_6.gp\" title \"%.0f%% of First Fresnel Zone\" with lines\n",clutter*METERS_PER_FOOT,LR->frq_mhz,fzone_clearance*100.0);
 			else
-				fprintf(fd,"plot \"profile.gp\" title \"Point-to-Point Profile\" with lines, \"clutter.gp\" title \"Ground Clutter (%.2f feet)\" with lines, \"reference.gp\" title \"Line of Sight Path\" with lines, \"curvature.gp\" axes x1y2 title \"Earth's Curvature Contour\" with lines, \"fresnel.gp\" axes x1y1 title \"First Fresnel Zone (%.3f MHz)\" with lines, \"fresnel_pt_6.gp\" title \"%.0f%% of First Fresnel Zone\" with lines\n",clutter,LR.frq_mhz,fzone_clearance*100.0);
+				fprintf(fd,"plot \"profile.gp\" title \"Point-to-Point Profile\" with lines, \"clutter.gp\" title \"Ground Clutter (%.2f feet)\" with lines, \"reference.gp\" title \"Line of Sight Path\" with lines, \"curvature.gp\" axes x1y2 title \"Earth's Curvature Contour\" with lines, \"fresnel.gp\" axes x1y1 title \"First Fresnel Zone (%.3f MHz)\" with lines, \"fresnel_pt_6.gp\" title \"%.0f%% of First Fresnel Zone\" with lines\n",clutter,LR->frq_mhz,fzone_clearance*100.0);
 		}
 
 		else
-			fprintf(fd,"plot \"profile.gp\" title \"Point-to-Point Profile\" with lines, \"reference.gp\" title \"Line of Sight Path\" with lines, \"curvature.gp\" axes x1y2 title \"Earth's Curvature Contour\" with lines, \"fresnel.gp\" axes x1y1 title \"First Fresnel Zone (%.3f MHz)\" with lines, \"fresnel_pt_6.gp\" title \"%.0f%% of First Fresnel Zone\" with lines\n",LR.frq_mhz,fzone_clearance*100.0);
+			fprintf(fd,"plot \"profile.gp\" title \"Point-to-Point Profile\" with lines, \"reference.gp\" title \"Line of Sight Path\" with lines, \"curvature.gp\" axes x1y2 title \"Earth's Curvature Contour\" with lines, \"fresnel.gp\" axes x1y1 title \"First Fresnel Zone (%.3f MHz)\" with lines, \"fresnel_pt_6.gp\" title \"%.0f%% of First Fresnel Zone\" with lines\n",LR->frq_mhz,fzone_clearance*100.0);
 	}
 
 	else
@@ -6466,7 +6359,7 @@ void GraphHeight(struct site source, struct site destination, char *name, unsign
 			if (fd1!=NULL)
 				unlink("clutter.gp");
 
-			if ((LR.frq_mhz>=20.0) && (LR.frq_mhz<=20000.0) && fresnel_plot)
+			if ((LR->frq_mhz>=20.0) && (LR->frq_mhz<=20000.0) && fresnel_plot)
 			{
 				unlink("fresnel.gp");
 				unlink("fresnel_pt_6.gp");
@@ -6481,7 +6374,7 @@ void GraphHeight(struct site source, struct site destination, char *name, unsign
 		fprintf(stderr,"\n*** ERROR: Error occurred invoking gnuplot!\n");
 }
 
-void ObstructionAnalysis(struct site xmtr, struct site rcvr, double f, FILE *outfile)
+void ObstructionAnalysis(struct site xmtr, struct site rcvr, double f, FILE *outfile,dem dem[])
 {
 	/* Perform an obstruction analysis along the
 	   path between receiver and transmitter. */
@@ -6493,12 +6386,12 @@ void ObstructionAnalysis(struct site xmtr, struct site rcvr, double f, FILE *out
 		h_r_f1, h_r_fpt6, h_f, h_los, lambda=0.0;
 	char	string[255], string_fpt6[255], string_f1[255];
 
-	ReadPath(xmtr,rcvr);
-	h_r=GetElevation(rcvr)+rcvr.alt+earthradius;
+	ReadPath(xmtr,rcvr,dem);
+	h_r=GetElevation(rcvr,dem)+rcvr.alt+earthradius;
 	h_r_f1=h_r;
 	h_r_fpt6=h_r;
 	h_r_orig=h_r;
-	h_t=GetElevation(xmtr)+xmtr.alt+earthradius;
+	h_t=GetElevation(xmtr,dem)+xmtr.alt+earthradius;
 	d_tx=5280.0*Distance(rcvr,xmtr);
 	cos_tx_angle=((h_r*h_r)+(d_tx*d_tx)-(h_t*h_t))/(2.0*h_r*d_tx);
 	cos_tx_angle_f1=cos_tx_angle;
@@ -6533,13 +6426,13 @@ void ObstructionAnalysis(struct site xmtr, struct site rcvr, double f, FILE *out
 	   acos().  However, note the inverted comparison: if
 	   acos(A) > acos(B), then B > A. */
 
-	for (x=path.length-1; x>0; x--)
+	for (x=path->length-1; x>0; x--)
 	{
-		site_x.lat=path.lat[x];
-		site_x.lon=path.lon[x];
+		site_x.lat=path->lat[x];
+		site_x.lon=path->lon[x];
 		site_x.alt=0.0;
 
-		h_x=GetElevation(site_x)+earthradius+clutter;
+		h_x=GetElevation(site_x,dem)+earthradius+clutter;
 		d_x=5280.0*Distance(rcvr,site_x);
 
 		/* Deal with the LOS path first. */
@@ -6611,9 +6504,9 @@ void ObstructionAnalysis(struct site xmtr, struct site rcvr, double f, FILE *out
 	if (h_r>h_r_orig)
 	{
 		if (metric)
-			snprintf(string,150,"\nAntenna at %s must be raised to at least %.2f meters AGL\nto clear all obstructions detected by %s.\n",rcvr.name, METERS_PER_FOOT*(h_r-GetElevation(rcvr)-earthradius),splat_name);
+			snprintf(string,150,"\nAntenna at %s must be raised to at least %.2f meters AGL\nto clear all obstructions detected by %s.\n",rcvr.name, METERS_PER_FOOT*(h_r-GetElevation(rcvr,dem)-earthradius),splat_name);
 		else
-			snprintf(string,150,"\nAntenna at %s must be raised to at least %.2f feet AGL\nto clear all obstructions detected by %s.\n",rcvr.name, h_r-GetElevation(rcvr)-earthradius,splat_name);
+			snprintf(string,150,"\nAntenna at %s must be raised to at least %.2f feet AGL\nto clear all obstructions detected by %s.\n",rcvr.name, h_r-GetElevation(rcvr,dem)-earthradius,splat_name);
 	}
 
 	else
@@ -6624,10 +6517,10 @@ void ObstructionAnalysis(struct site xmtr, struct site rcvr, double f, FILE *out
 		if (h_r_fpt6>h_r_orig)
 		{
 			if (metric)
-				snprintf(string_fpt6,150,"\nAntenna at %s must be raised to at least %.2f meters AGL\nto clear %.0f%c of the first Fresnel zone.\n",rcvr.name, METERS_PER_FOOT*(h_r_fpt6-GetElevation(rcvr)-earthradius),fzone_clearance*100.0,37);
+				snprintf(string_fpt6,150,"\nAntenna at %s must be raised to at least %.2f meters AGL\nto clear %.0f%c of the first Fresnel zone.\n",rcvr.name, METERS_PER_FOOT*(h_r_fpt6-GetElevation(rcvr,dem)-earthradius),fzone_clearance*100.0,37);
 
 			else
-				snprintf(string_fpt6,150,"\nAntenna at %s must be raised to at least %.2f feet AGL\nto clear %.0f%c of the first Fresnel zone.\n",rcvr.name, h_r_fpt6-GetElevation(rcvr)-earthradius,fzone_clearance*100.0,37);
+				snprintf(string_fpt6,150,"\nAntenna at %s must be raised to at least %.2f feet AGL\nto clear %.0f%c of the first Fresnel zone.\n",rcvr.name, h_r_fpt6-GetElevation(rcvr,dem)-earthradius,fzone_clearance*100.0,37);
 		}
 
 		else
@@ -6636,10 +6529,10 @@ void ObstructionAnalysis(struct site xmtr, struct site rcvr, double f, FILE *out
 		if (h_r_f1>h_r_orig)
 		{
 			if (metric)
-				snprintf(string_f1,150,"\nAntenna at %s must be raised to at least %.2f meters AGL\nto clear the first Fresnel zone.\n",rcvr.name, METERS_PER_FOOT*(h_r_f1-GetElevation(rcvr)-earthradius));
+				snprintf(string_f1,150,"\nAntenna at %s must be raised to at least %.2f meters AGL\nto clear the first Fresnel zone.\n",rcvr.name, METERS_PER_FOOT*(h_r_f1-GetElevation(rcvr,dem)-earthradius));
 
 			else			
-				snprintf(string_f1,150,"\nAntenna at %s must be raised to at least %.2f feet AGL\nto clear the first Fresnel zone.\n",rcvr.name, h_r_f1-GetElevation(rcvr)-earthradius);
+				snprintf(string_f1,150,"\nAntenna at %s must be raised to at least %.2f feet AGL\nto clear the first Fresnel zone.\n",rcvr.name, h_r_f1-GetElevation(rcvr,dem)-earthradius);
 
 		}
 
@@ -6656,7 +6549,7 @@ void ObstructionAnalysis(struct site xmtr, struct site rcvr, double f, FILE *out
 	}
 }
 
-void PathReport(struct site source, struct site destination, char *name, char graph_it)
+void PathReport(struct site source, struct site destination, char *name, char graph_it, double elev[],dem dem[])
 {
 	/* This function writes a SPLAT! Path Report (name.txt) to
 	   the filesystem.  If (graph_it == 1), then gnuplot is invoked
@@ -6667,10 +6560,10 @@ void PathReport(struct site source, struct site destination, char *name, char gr
 	   terminal setting and output file type.  If no extension is
 	   found, .png is assumed. */
 
-	int	x, y, z, errnum;
+	int	x, y, z, errnum = 0;
 	char	basename[255], term[30], ext[15], strmode[100],
 		report_name[80], block=0, propstring[20];
-	double	maxloss=-100000.0, minloss=100000.0, loss, haavt,
+	double	maxloss=-100000.0, minloss=100000.0, loss = 0.0, haavt,
 		angle1, angle2, azimuth, pattern=1.0, patterndB=0.0,
 		total_loss=0.0, cos_xmtr_angle, cos_test_angle=0.0,
 		source_alt, test_alt, dest_alt, source_alt2, dest_alt2,
@@ -6710,17 +6603,17 @@ void PathReport(struct site source, struct site destination, char *name, char gr
 
 	if (metric)
 	{
-		fprintf(fd2,"Ground elevation: %.2f meters AMSL\n",METERS_PER_FOOT*GetElevation(source));
-		fprintf(fd2,"Antenna height: %.2f meters AGL / %.2f meters AMSL\n",METERS_PER_FOOT*source.alt,METERS_PER_FOOT*(source.alt+GetElevation(source)));
+		fprintf(fd2,"Ground elevation: %.2f meters AMSL\n",METERS_PER_FOOT*GetElevation(source,dem));
+		fprintf(fd2,"Antenna height: %.2f meters AGL / %.2f meters AMSL\n",METERS_PER_FOOT*source.alt,METERS_PER_FOOT*(source.alt+GetElevation(source,dem)));
 	}
 
 	else
 	{
-		fprintf(fd2,"Ground elevation: %.2f feet AMSL\n",GetElevation(source));
-		fprintf(fd2,"Antenna height: %.2f feet AGL / %.2f feet AMSL\n",source.alt, source.alt+GetElevation(source));
+		fprintf(fd2,"Ground elevation: %.2f feet AMSL\n",GetElevation(source,dem));
+		fprintf(fd2,"Antenna height: %.2f feet AGL / %.2f feet AMSL\n",source.alt, source.alt+GetElevation(source,dem));
 	}
 
-	haavt=haat(source);
+	haavt=haat(source,dem);
 
 	if (haavt>-4999.0)
 	{
@@ -6731,15 +6624,15 @@ void PathReport(struct site source, struct site destination, char *name, char gr
 	}
 
 	azimuth=Azimuth(source,destination);
-	angle1=ElevationAngle(source,destination);
-	angle2=ElevationAngle2(source,destination,earthradius);
+	angle1=ElevationAngle(source,destination,dem);
+	angle2=ElevationAngle2(source,destination,earthradius,dem);
 
 	if (got_azimuth_pattern || got_elevation_pattern)
 	{
 		x=(int)rint(10.0*(10.0-angle2));
 
 		if (x>=0 && x<=1000)
-			pattern=(double)LR.antenna_pattern[(int)rint(azimuth)][x];
+			pattern=(double)LR->antenna_pattern[(int)rint(azimuth)][x];
 
 		patterndB=20.0*log10(pattern);
 	}
@@ -6790,17 +6683,17 @@ void PathReport(struct site source, struct site destination, char *name, char gr
 
 	if (metric)
 	{
-		fprintf(fd2,"Ground elevation: %.2f meters AMSL\n",METERS_PER_FOOT*GetElevation(destination));
-		fprintf(fd2,"Antenna height: %.2f meters AGL / %.2f meters AMSL\n",METERS_PER_FOOT*destination.alt, METERS_PER_FOOT*(destination.alt+GetElevation(destination)));
+		fprintf(fd2,"Ground elevation: %.2f meters AMSL\n",METERS_PER_FOOT*GetElevation(destination,dem));
+		fprintf(fd2,"Antenna height: %.2f meters AGL / %.2f meters AMSL\n",METERS_PER_FOOT*destination.alt, METERS_PER_FOOT*(destination.alt+GetElevation(destination,dem)));
 	}
 
 	else
 	{
-		fprintf(fd2,"Ground elevation: %.2f feet AMSL\n",GetElevation(destination));
-		fprintf(fd2,"Antenna height: %.2f feet AGL / %.2f feet AMSL\n",destination.alt, destination.alt+GetElevation(destination));
+		fprintf(fd2,"Ground elevation: %.2f feet AMSL\n",GetElevation(destination,dem));
+		fprintf(fd2,"Antenna height: %.2f feet AGL / %.2f feet AMSL\n",destination.alt, destination.alt+GetElevation(destination,dem));
 	}
 
-	haavt=haat(destination);
+	haavt=haat(destination,dem);
 
 	if (haavt>-4999.0)
 	{
@@ -6818,8 +6711,8 @@ void PathReport(struct site source, struct site destination, char *name, char gr
 
 	azimuth=Azimuth(destination,source);
 
-	angle1=ElevationAngle(destination,source);
-	angle2=ElevationAngle2(destination,source,earthradius);
+	angle1=ElevationAngle(destination,source,dem);
+	angle2=ElevationAngle2(destination,source,earthradius,dem);
 
 	fprintf(fd2,"Azimuth to %s: %.2f degrees\n",source.name,azimuth);
 
@@ -6841,20 +6734,20 @@ void PathReport(struct site source, struct site destination, char *name, char gr
 
 	fprintf(fd2,"\n%s\n\n",dashes);
 
-	if (LR.frq_mhz>0.0)
+	if (LR->frq_mhz>0.0)
 	{
 		if (olditm)
 			fprintf(fd2,"Longley-Rice Parameters Used In This Analysis:\n\n");
 		else
 			fprintf(fd2,"ITWOM Version %.1f Parameters Used In This Analysis:\n\n",ITWOMVersion());
 
-		fprintf(fd2,"Earth's Dielectric Constant: %.3lf\n",LR.eps_dielect);
-		fprintf(fd2,"Earth's Conductivity: %.3lf Siemens/meter\n",LR.sgm_conductivity);
-		fprintf(fd2,"Atmospheric Bending Constant (N-units): %.3lf ppm\n",LR.eno_ns_surfref);
-		fprintf(fd2,"Frequency: %.3lf MHz\n",LR.frq_mhz);
-		fprintf(fd2,"Radio Climate: %d (",LR.radio_climate);
+		fprintf(fd2,"Earth's Dielectric Constant: %.3lf\n",LR->eps_dielect);
+		fprintf(fd2,"Earth's Conductivity: %.3lf Siemens/meter\n",LR->sgm_conductivity);
+		fprintf(fd2,"Atmospheric Bending Constant (N-units): %.3lf ppm\n",LR->eno_ns_surfref);
+		fprintf(fd2,"Frequency: %.3lf MHz\n",LR->frq_mhz);
+		fprintf(fd2,"Radio Climate: %d (",LR->radio_climate);
 
-		switch (LR.radio_climate)
+		switch (LR->radio_climate)
 		{
 			case 1:
 			fprintf(fd2,"Equatorial");
@@ -6888,41 +6781,41 @@ void PathReport(struct site source, struct site destination, char *name, char gr
 			fprintf(fd2,"Unknown");
 		}
 
-		fprintf(fd2,")\nPolarization: %d (",LR.pol);
+		fprintf(fd2,")\nPolarization: %d (",LR->pol);
 
-		if (LR.pol==0)
+		if (LR->pol==0)
 			fprintf(fd2,"Horizontal");
 
-		if (LR.pol==1)
+		if (LR->pol==1)
 			fprintf(fd2,"Vertical");
 
-		fprintf(fd2,")\nFraction of Situations: %.1lf%c\n",LR.conf*100.0,37);
-		fprintf(fd2,"Fraction of Time: %.1lf%c\n",LR.rel*100.0,37);
+		fprintf(fd2,")\nFraction of Situations: %.1lf%c\n",LR->conf*100.0,37);
+		fprintf(fd2,"Fraction of Time: %.1lf%c\n",LR->rel*100.0,37);
 
-		if (LR.erp!=0.0)
+		if (LR->erp!=0.0)
 		{
 			fprintf(fd2,"Transmitter ERP: ");
 
-			if (LR.erp<1.0)
-				fprintf(fd2,"%.1lf milliwatts",1000.0*LR.erp);
+			if (LR->erp<1.0)
+				fprintf(fd2,"%.1lf milliwatts",1000.0*LR->erp);
 
-			if (LR.erp>=1.0 && LR.erp<10.0)
-				fprintf(fd2,"%.1lf Watts",LR.erp);
+			if (LR->erp>=1.0 && LR->erp<10.0)
+				fprintf(fd2,"%.1lf Watts",LR->erp);
 
-			if (LR.erp>=10.0 && LR.erp<10.0e3)
-				fprintf(fd2,"%.0lf Watts",LR.erp);
+			if (LR->erp>=10.0 && LR->erp<10.0e3)
+				fprintf(fd2,"%.0lf Watts",LR->erp);
 
-			if (LR.erp>=10.0e3)
-				fprintf(fd2,"%.3lf kilowatts",LR.erp/1.0e3);
+			if (LR->erp>=10.0e3)
+				fprintf(fd2,"%.3lf kilowatts",LR->erp/1.0e3);
 
-			dBm=10.0*(log10(LR.erp*1000.0));
+			dBm=10.0*(log10(LR->erp*1000.0));
 			fprintf(fd2," (%+.2f dBm)\n",dBm);
 
 			/* EIRP = ERP + 2.14 dB */
 
 			fprintf(fd2,"Transmitter EIRP: ");
 
-			eirp=LR.erp*1.636816521;
+			eirp=LR->erp*1.636816521;
 
 			if (eirp<1.0)
 				fprintf(fd2,"%.1lf milliwatts",1000.0*eirp);
@@ -6947,28 +6840,28 @@ void PathReport(struct site source, struct site destination, char *name, char gr
 		if (patterndB!=0.0)
 			fprintf(fd2,"%s antenna pattern towards %s: %.3f (%.2f dB)\n", source.name, destination.name, pattern, patterndB);
 
-		ReadPath(source, destination);  /* source=TX, destination=RX */
+		ReadPath(source, destination,dem);  /* source=TX, destination=RX */
 
 		/* Copy elevations plus clutter along
 		   path into the elev[] array. */
 
-		for (x=1; x<path.length-1; x++)
-			elev[x+2]=METERS_PER_FOOT*(path.elevation[x]==0.0?path.elevation[x]:(clutter+path.elevation[x]));
+		for (x=1; x<path->length-1; x++)
+			elev[x+2]=METERS_PER_FOOT*(path->elevation[x]==0.0?path->elevation[x]:(clutter+path->elevation[x]));
 
 		/* Copy ending points without clutter */
 
-		elev[2]=path.elevation[0]*METERS_PER_FOOT;
-		elev[path.length+1]=path.elevation[path.length-1]*METERS_PER_FOOT;
+		elev[2]=path->elevation[0]*METERS_PER_FOOT;
+		elev[path->length+1]=path->elevation[path->length-1]*METERS_PER_FOOT;
 
 		fd=fopen("profile.gp","w");
 
 		azimuth=rint(Azimuth(source,destination));
 
-		for (y=2; y<(path.length-1); y++)  /* path.length-1 avoids LR error */
+		for (y=2; y<(path->length-1); y++)  /* path->length-1 avoids LR error */
 		{
-			distance=5280.0*path.distance[y];
-			source_alt=four_thirds_earth+source.alt+path.elevation[0];
-			dest_alt=four_thirds_earth+destination.alt+path.elevation[y];
+			distance=5280.0*path->distance[y];
+			source_alt=four_thirds_earth+source.alt+path->elevation[0];
+			dest_alt=four_thirds_earth+destination.alt+path->elevation[y];
 			dest_alt2=dest_alt*dest_alt;
 			source_alt2=source_alt*source_alt;
 
@@ -6981,12 +6874,12 @@ void PathReport(struct site source, struct site destination, char *name, char gr
 			{
 				/* If an antenna elevation pattern is available, the
 				   following code determines the elevation angle to
-			   	   the first obstruction along the path. */
+			   	   the first obstruction along the path-> */
 
 				for (x=2, block=0; x<y && block==0; x++)
 				{
-					distance=5280.0*(path.distance[y]-path.distance[x]);
-					test_alt=four_thirds_earth+path.elevation[x];
+					distance=5280.0*(path->distance[y]-path->distance[x]);
+					test_alt=four_thirds_earth+path->elevation[x];
 
 					/* Calculate the cosine of the elevation
 					   angle of the terrain (test point)
@@ -7020,19 +6913,19 @@ void PathReport(struct site source, struct site destination, char *name, char gr
 
 			/* Distance between elevation samples */
 
-			elev[1]=METERS_PER_MILE*(path.distance[y]-path.distance[y-1]);
+			elev[1]=METERS_PER_MILE*(path->distance[y]-path->distance[y-1]);
 
 			if (olditm)
 				point_to_point_ITM(elev,source.alt*METERS_PER_FOOT, 
-  		 		destination.alt*METERS_PER_FOOT, LR.eps_dielect,
-				LR.sgm_conductivity, LR.eno_ns_surfref, LR.frq_mhz,
-				LR.radio_climate, LR.pol, LR.conf, LR.rel, loss,
+  		 		destination.alt*METERS_PER_FOOT, LR->eps_dielect,
+				LR->sgm_conductivity, LR->eno_ns_surfref, LR->frq_mhz,
+				LR->radio_climate, LR->pol, LR->conf, LR->rel, loss,
 				strmode, errnum);
 			else
 				point_to_point(elev,source.alt*METERS_PER_FOOT, 
-  		 		destination.alt*METERS_PER_FOOT, LR.eps_dielect,
-				LR.sgm_conductivity, LR.eno_ns_surfref, LR.frq_mhz,
-				LR.radio_climate, LR.pol, LR.conf, LR.rel, loss,
+  		 		destination.alt*METERS_PER_FOOT, LR->eps_dielect,
+				LR->sgm_conductivity, LR->eno_ns_surfref, LR->frq_mhz,
+				LR->radio_climate, LR->pol, LR->conf, LR->rel, loss,
 				strmode, errnum);
 
 			if (block)
@@ -7047,7 +6940,7 @@ void PathReport(struct site source, struct site destination, char *name, char gr
 
 			if (x>=0 && x<=1000)
 			{
-				pattern=(double)LR.antenna_pattern[(int)azimuth][x];
+				pattern=(double)LR->antenna_pattern[(int)azimuth][x];
 
 				if (pattern!=0.0)
 					patterndB=20.0*log10(pattern);
@@ -7059,10 +6952,10 @@ void PathReport(struct site source, struct site destination, char *name, char gr
 			total_loss=loss-patterndB;
 
 			if (metric)
-				fprintf(fd,"%f\t%f\n",KM_PER_MILE*path.distance[y],total_loss);
+				fprintf(fd,"%f\t%f\n",KM_PER_MILE*path->distance[y],total_loss);
 
 			else
-				fprintf(fd,"%f\t%f\n",path.distance[y],total_loss);
+				fprintf(fd,"%f\t%f\n",path->distance[y],total_loss);
 
 			if (total_loss>maxloss)
 				maxloss=total_loss;
@@ -7078,7 +6971,7 @@ void PathReport(struct site source, struct site destination, char *name, char gr
 
 		if (distance!=0.0)
 		{
-			free_space_loss=36.6+(20.0*log10(LR.frq_mhz))+(20.0*log10(distance));
+			free_space_loss=36.6+(20.0*log10(LR->frq_mhz))+(20.0*log10(distance));
 
 			fprintf(fd2,"Free space path loss: %.2f dB\n",free_space_loss);
 		}
@@ -7094,9 +6987,9 @@ void PathReport(struct site source, struct site destination, char *name, char gr
 		if (patterndB!=0.0)
 			fprintf(fd2,"Total path loss including %s antenna pattern: %.2f dB\n",source.name,total_loss);
 
-		if (LR.erp!=0.0)
+		if (LR->erp!=0.0)
 		{
-			field_strength=(139.4+(20.0*log10(LR.frq_mhz))-total_loss)+(10.0*log10(LR.erp/1000.0));
+			field_strength=(139.4+(20.0*log10(LR->frq_mhz))-total_loss)+(10.0*log10(LR->erp/1000.0));
 
 			/* dBm is referenced to EIRP */
 
@@ -7135,7 +7028,7 @@ void PathReport(struct site source, struct site destination, char *name, char gr
 			if (strncmp(strmode,"2_Hrzn",6)==0)
 				fprintf(fd2,"Double Horizon ");
 
-			y=strlen(strmode);
+			size_t y = strlen(strmode);
 
 			if (y>19)
 				y=19;
@@ -7188,7 +7081,7 @@ void PathReport(struct site source, struct site destination, char *name, char gr
 	fprintf(stdout,"\nPath Loss Report written to: \"%s\"\n",report_name);
 	fflush(stdout);
 
-	ObstructionAnalysis(source, destination, LR.frq_mhz, fd2);
+	ObstructionAnalysis(source, destination, LR->frq_mhz, fd2,dem);
 
 	fclose(fd2);
 
@@ -7210,10 +7103,10 @@ void PathReport(struct site source, struct site destination, char *name, char gr
 			/* Extract extension and terminal type from "name" */
 
 			ext[0]=0;
-			y=strlen(name);
+			size_t y = strlen(name);
 			strncpy(basename,name,254);
 
-			for (x=y-1; x>0 && name[x]!='.'; x--);
+			for (x= (int) y - 1; x>0 && name[x]!='.'; x--);
 
 			if (x>0)  /* Extension found */
 			{
@@ -7295,7 +7188,7 @@ void PathReport(struct site source, struct site destination, char *name, char gr
 		unlink("profile.gp");
 }
 
-void SiteReport(struct site xmtr)
+void SiteReport(struct site xmtr,dem dem[])
 {
 	char	report_name[80];
 	double	terrain;
@@ -7330,17 +7223,17 @@ void SiteReport(struct site xmtr)
 
 	if (metric)
 	{
-		fprintf(fd,"Ground elevation: %.2f meters AMSL\n",METERS_PER_FOOT*GetElevation(xmtr));
-		fprintf(fd,"Antenna height: %.2f meters AGL / %.2f meters AMSL\n",METERS_PER_FOOT*xmtr.alt, METERS_PER_FOOT*(xmtr.alt+GetElevation(xmtr)));
+		fprintf(fd,"Ground elevation: %.2f meters AMSL\n",METERS_PER_FOOT*GetElevation(xmtr,dem));
+		fprintf(fd,"Antenna height: %.2f meters AGL / %.2f meters AMSL\n",METERS_PER_FOOT*xmtr.alt, METERS_PER_FOOT*(xmtr.alt+GetElevation(xmtr,dem)));
 	}
 
 	else
 	{
-		fprintf(fd,"Ground elevation: %.2f feet AMSL\n",GetElevation(xmtr));
-		fprintf(fd,"Antenna height: %.2f feet AGL / %.2f feet AMSL\n",xmtr.alt, xmtr.alt+GetElevation(xmtr));
+		fprintf(fd,"Ground elevation: %.2f feet AMSL\n",GetElevation(xmtr,dem));
+		fprintf(fd,"Antenna height: %.2f feet AGL / %.2f feet AMSL\n",xmtr.alt, xmtr.alt+GetElevation(xmtr,dem));
 	}
 
-	terrain=haat(xmtr);
+	terrain=haat(xmtr,dem);
 
 	if (terrain>-4999.0)
 	{
@@ -7356,7 +7249,7 @@ void SiteReport(struct site xmtr)
 		for (azi=0; azi<=315; azi+=45)
 		{
 			fprintf(fd,"Average terrain at %3d degrees azimuth: ",azi);
-			terrain=AverageTerrain(xmtr,(double)azi,2.0,10.0);
+			terrain=AverageTerrain(xmtr,(double)azi,2.0,10.0,dem);
 
 			if (terrain>-4999.0)
 			{
@@ -7376,7 +7269,7 @@ void SiteReport(struct site xmtr)
 	fprintf(stdout,"\nSite analysis report written to: \"%s\"\n",report_name);
 }
 
-void LoadTopoData(int max_lon, int min_lon, int max_lat, int min_lat)
+void LoadTopoData(int max_lon, int min_lon, int max_lat, int min_lat, dem dem[])
 {
 	/* This function loads the SDF files required
 	   to cover the limits of the region specified. */ 
@@ -7410,7 +7303,7 @@ void LoadTopoData(int max_lon, int min_lon, int max_lat, int min_lat)
 					snprintf(string,19,"%d:%d:%d:%d-hd",x, x+1, ymin, ymax);
 				else
 					snprintf(string,16,"%d:%d:%d:%d",x, x+1, ymin, ymax);
-				LoadSDF(string);
+				LoadSDF(string, dem);
 			}
 	}
 
@@ -7439,12 +7332,12 @@ void LoadTopoData(int max_lon, int min_lon, int max_lat, int min_lat)
 					snprintf(string,19,"%d:%d:%d:%d-hd",x, x+1, ymin, ymax);
 				else
 					snprintf(string,16,"%d:%d:%d:%d",x, x+1, ymin, ymax);
-				LoadSDF(string);
+				LoadSDF(string, dem);
 			}
 	}
 }
 
-int LoadANO(char *filename)
+int LoadANO(char *filename, dem dem[])
 {
 	/* This function reads a SPLAT! alphanumeric output 
 	   file (-ani option) for analysis and/or map generation. */
@@ -7481,7 +7374,7 @@ int LoadANO(char *filename)
 		if (pointer!=NULL)
 			*pointer=0;
 
-		LoadTopoData(max_west-1, min_west, max_north-1, min_north);
+		LoadTopoData(max_west-1, min_west, max_north-1, min_north,dem);
 
 		fprintf(stdout,"\nReading \"%s\"... ",filename);
 		fflush(stdout);
@@ -7491,7 +7384,7 @@ int LoadANO(char *filename)
 
 		while (feof(fd)==0)
 		{
-			if (LR.erp==0.0)
+			if (LR->erp==0.0)
 			{
 				/* Path loss */
 
@@ -7502,11 +7395,11 @@ int LoadANO(char *filename)
 					if (ano>255.0)
 						ano=255.0;
 
-					PutSignal(latitude,longitude,((unsigned char)round(ano)));
+					PutSignal(latitude,longitude,((unsigned char)round(ano)), dem);
 				}
 			}
 
-			if (LR.erp!=0.0 && dbm!=0)
+			if (LR->erp!=0.0 && dbm!=0)
 			{
 				/* signal power level in dBm */
 
@@ -7520,11 +7413,11 @@ int LoadANO(char *filename)
 					if (ano>255.0)
 						ano=255.0;
 
-					PutSignal(latitude,longitude,((unsigned char)round(ano)));
+					PutSignal(latitude,longitude,((unsigned char)round(ano)), dem);
 				}
 			}
 
-			if (LR.erp!=0.0 && dbm==0)
+			if (LR->erp!=0.0 && dbm==0)
 			{
 				/* field strength dBuV/m */
 
@@ -7538,7 +7431,7 @@ int LoadANO(char *filename)
 					if (ano>255.0)
 						ano=255.0;
 
-					PutSignal(latitude,longitude,((unsigned char)round(ano)));
+					PutSignal(latitude,longitude,((unsigned char)round(ano)), dem);
 				}
 			}
 
@@ -7558,7 +7451,7 @@ int LoadANO(char *filename)
 	return error;
 }
 
-void WriteKML(struct site source, struct site destination)
+void WriteKML(struct site source, struct site destination,dem dem[])
 {
 	int	x, y;
 	char	block, report_name[80];
@@ -7566,7 +7459,7 @@ void WriteKML(struct site source, struct site destination)
 		azimuth, cos_test_angle, test_alt;
 	FILE	*fd=NULL;
 
-	ReadPath(source,destination);
+	ReadPath(source,destination,dem);
 
 	sprintf(report_name,"%s-to-%s.kml",source.name,destination.name);
 
@@ -7683,8 +7576,8 @@ void WriteKML(struct site source, struct site destination)
 	fprintf(fd,"    <altitudeMode>relativeToGround</altitudeMode>\n");
 	fprintf(fd,"    <coordinates>\n");
 
-	for (x=0; x<path.length; x++)
-		fprintf(fd,"      %f,%f,5\n",(path.lon[x]<180.0?-path.lon[x]:360.0-path.lon[x]),path.lat[x]);
+	for (x=0; x<path->length; x++)
+		fprintf(fd,"      %f,%f,5\n",(path->lon[x]<180.0?-path->lon[x]:360.0-path->lon[x]),path->lat[x]);
 
 	fprintf(fd,"    </coordinates>\n");
 	fprintf(fd,"   </LineString>\n");
@@ -7710,11 +7603,11 @@ void WriteKML(struct site source, struct site destination)
 
 	/* Walk across the "path", indentifying obstructions along the way */
 
-	for (y=0; y<path.length; y++)
+	for (y=0; y<path->length; y++)
 	{
-		distance=5280.0*path.distance[y];
-		tx_alt=earthradius+source.alt+path.elevation[0];
-		rx_alt=earthradius+destination.alt+path.elevation[y];
+		distance=5280.0*path->distance[y];
+		tx_alt=earthradius+source.alt+path->elevation[0];
+		rx_alt=earthradius+destination.alt+path->elevation[y];
 
 		/* Calculate the cosine of the elevation of the
 		   transmitter as seen at the temp rx point. */
@@ -7723,8 +7616,8 @@ void WriteKML(struct site source, struct site destination)
 
 		for (x=y, block=0; x>=0 && block==0; x--)
 		{
-			distance=5280.0*(path.distance[y]-path.distance[x]);
-			test_alt=earthradius+path.elevation[x];
+			distance=5280.0*(path->distance[y]-path->distance[x]);
+			test_alt=earthradius+path->elevation[x];
 
 			cos_test_angle=((rx_alt*rx_alt)+(distance*distance)-(test_alt*test_alt))/(2.0*rx_alt*distance);
 
@@ -7740,9 +7633,9 @@ void WriteKML(struct site source, struct site destination)
 		}
 
 		if (block)
-			fprintf(fd,"      %f,%f,-30\n",(path.lon[y]<180.0?-path.lon[y]:360.0-path.lon[y]),path.lat[y]);
+			fprintf(fd,"      %f,%f,-30\n",(path->lon[y]<180.0?-path->lon[y]:360.0-path->lon[y]),path->lat[y]);
 		else
-			fprintf(fd,"      %f,%f,5\n",(path.lon[y]<180.0?-path.lon[y]:360.0-path.lon[y]),path.lat[y]);
+			fprintf(fd,"      %f,%f,5\n",(path->lon[y]<180.0?-path->lon[y]:360.0-path->lon[y]),path->lat[y]);
 	}
 
 	fprintf(fd,"    </coordinates>\n");
@@ -7767,1072 +7660,3 @@ void WriteKML(struct site source, struct site destination)
 	fflush(stdout);
 }
 
-int main(int argc, char *argv[])
-{
-	int		x, y, z=0, min_lat, min_lon, max_lat, max_lon,
-			rxlat, rxlon, txlat, txlon, west_min, west_max,
-			north_min, north_max;
-
-	unsigned char	coverage=0, LRmap=0, terrain_plot=0,
-			elevation_plot=0, height_plot=0, map=0,
-			longley_plot=0, cities=0, bfs=0, txsites=0,
-			norm=0, topomap=0, geo=0, kml=0, pt2pt_mode=0,
-			area_mode=0, max_txsites, ngs=0, nolospath=0,
-			nositereports=0, fresnel_plot=1, command_line_log=0;
- 
-	char		mapfile[255], header[80], city_file[5][255], 
-			elevation_file[255], height_file[255], 
-			longley_file[255], terrain_file[255],
-			string[255], rxfile[255], *env=NULL,
-			txfile[255], boundary_file[5][255],
-			udt_file[255], rxsite=0, ani_filename[255],
-			ano_filename[255], ext[20], logfile[255];
-
-	double		altitude=0.0, altitudeLR=0.0, tx_range=0.0,
-			rx_range=0.0, deg_range=0.0, deg_limit=0.0,
-			deg_range_lon, er_mult;
-
-	struct		site tx_site[32], rx_site;
-
-	FILE		*fd;
-
-	strncpy(splat_version,"1.4.2\0",6);
-
-	if (HD_MODE==1)
-		strncpy(splat_name,"SPLAT! HD\0",10);
-	else
-		strncpy(splat_name,"SPLAT!\0",7);
-
-	strncpy(dashes,"---------------------------------------------------------------------------\0",76);
-
-	if (argc==1)
-	{
-		fprintf(stdout,"\n\t\t --==[ %s v%s Available Options... ]==--\n\n",splat_name, splat_version);
-
-		fprintf(stdout,"       -t txsite(s).qth (max of 4 with -c, max of 30 with -L)\n");
-		fprintf(stdout,"       -r rxsite.qth\n");
-		fprintf(stdout,"       -c plot LOS coverage of TX(s) with an RX antenna at X feet/meters AGL\n");
-		fprintf(stdout,"       -L plot path loss map of TX based on an RX at X feet/meters AGL\n");
-		fprintf(stdout,"       -s filename(s) of city/site file(s) to import (5 max)\n");
-		fprintf(stdout,"       -b filename(s) of cartographic boundary file(s) to import (5 max)\n");
-		fprintf(stdout,"       -p filename of terrain profile graph to plot\n");
-		fprintf(stdout,"       -e filename of terrain elevation graph to plot\n");
-		fprintf(stdout,"       -h filename of terrain height graph to plot\n");
-		fprintf(stdout,"       -H filename of normalized terrain height graph to plot\n");
-		fprintf(stdout,"       -l filename of path loss graph to plot\n");
-		fprintf(stdout,"       -o filename of topographic map to generate (.ppm)\n");
-		fprintf(stdout,"       -u filename of user-defined terrain file to import\n");
-		fprintf(stdout,"       -d sdf file directory path (overrides path in ~/.splat_path file)\n");
-		fprintf(stdout,"       -m earth radius multiplier\n");
-		fprintf(stdout,"       -n do not plot LOS paths in .ppm maps\n");
-		fprintf(stdout,"       -N do not produce unnecessary site or obstruction reports\n");	
-		fprintf(stdout,"       -f frequency for Fresnel zone calculation (MHz)\n");
-		fprintf(stdout,"       -R modify default range for -c or -L (miles/kilometers)\n");
-		fprintf(stdout,"      -sc display smooth rather than quantized contour levels\n");
-		fprintf(stdout,"      -db threshold beyond which contours will not be displayed\n");
-		fprintf(stdout,"      -nf do not plot Fresnel zones in height plots\n");
-		fprintf(stdout,"      -fz Fresnel zone clearance percentage (default = 60)\n");
-		fprintf(stdout,"      -gc ground clutter height (feet/meters)\n");
-		fprintf(stdout,"     -ngs display greyscale topography as white in .ppm files\n"); 	
-		fprintf(stdout,"     -erp override ERP in .lrp file (Watts)\n");
-		fprintf(stdout,"     -ano name of alphanumeric output file\n");
-		fprintf(stdout,"     -ani name of alphanumeric input file\n");
-		fprintf(stdout,"     -udt name of user defined terrain input file\n");
-		fprintf(stdout,"     -kml generate Google Earth (.kml) compatible output\n");
-		fprintf(stdout,"     -geo generate an Xastir .geo georeference file (with .ppm output)\n");
-		fprintf(stdout,"     -dbm plot signal power level contours rather than field strength\n");
-		fprintf(stdout,"     -log copy command line string to this output file\n");
-		fprintf(stdout,"   -gpsav preserve gnuplot temporary working files after SPLAT! execution\n");
-		fprintf(stdout,"  -metric employ metric rather than imperial units for all user I/O\n");
-		fprintf(stdout,"  -olditm invoke Longley-Rice rather than the default ITWOM model\n\n");
-		fprintf(stdout,"If that flew by too fast, consider piping the output through 'less':\n");
-
-		if (HD_MODE==0)
-			fprintf(stdout,"\n\tsplat | less\n\n");
-		else
-			fprintf(stdout,"\n\tsplat-hd | less\n\n");
-
-		fprintf(stdout,"Type 'man splat', or see the documentation for more details.\n\n");
-
-		y=(int)sqrt((int)MAXPAGES);
-
-		fprintf(stdout,"This compilation of %s supports analysis over a region of %d square\n",splat_name,y);
-
-		if (y==1)
-
-			fprintf(stdout,"degree");
-		else
-			fprintf(stdout,"degrees");
-
-		fprintf(stdout," of terrain, and computes signal levels using ITWOM Version %.1f.\n\n",ITWOMVersion());
-		fflush(stdout);
-
-		return 1;
-	}
-
-	y=argc-1;
-
-	olditm=0;
-	kml=0;
-	geo=0;
-	dbm=0;
-	gpsav=0;
-	metric=0;
-	rxfile[0]=0;
-	txfile[0]=0;
-	string[0]=0;
-	mapfile[0]=0;
-	clutter=0.0;
-	forced_erp=-1.0;
-	forced_freq=0.0;
-	elevation_file[0]=0;
-	terrain_file[0]=0;
-	sdf_path[0]=0;
-	udt_file[0]=0;
-	path.length=0;
-	max_txsites=30;
-	fzone_clearance=0.6;
-	contour_threshold=0;
-	rx_site.lat=91.0;
-	rx_site.lon=361.0;
-	longley_file[0]=0;
-	ano_filename[0]=0;
-	ani_filename[0]=0;
-	smooth_contours=0;
-	earthradius=EARTHRADIUS;
-
-	ippd=IPPD;		/* pixels per degree (integer) */
-	ppd=(double)ippd;	/* pixels per degree (double)  */
-	dpp=1.0/ppd;		/* degrees per pixel */
-	mpi=ippd-1;		/* maximum pixel index per degree */
-
-	sprintf(header,"\n\t\t--==[ Welcome To %s v%s ]==--\n\n", splat_name, splat_version);
-
-	for (x=0; x<4; x++)
-	{
-		tx_site[x].lat=91.0;
-		tx_site[x].lon=361.0;
-	}
-
-	for (x=0; x<MAXPAGES; x++)
-	{
-		dem[x].min_el=32768;
-		dem[x].max_el=-32768;
-		dem[x].min_north=90;
-		dem[x].max_north=-90;
-		dem[x].min_west=360;
-		dem[x].max_west=-1;
-	}
-
-	/* Scan for command line arguments */
-
-	for (x=1; x<=y; x++)
-	{
-		if (strcmp(argv[x],"-R")==0)
-		{
-			z=x+1;
-
-			if (z<=y && argv[z][0] && argv[z][0]!='-')
-			{
-				sscanf(argv[z],"%lf",&max_range);
-
-				if (max_range<0.0)
-					max_range=0.0;
-
-				if (max_range>1000.0)
-					max_range=1000.0;
-			}			 
-		}
-
-		if (strcmp(argv[x],"-m")==0)
-		{
-			z=x+1;
-
-			if (z<=y && argv[z][0] && argv[z][0]!='-')
-			{
-				sscanf(argv[z],"%lf",&er_mult);
-
-				if (er_mult<0.1)
-					er_mult=1.0;
-
-				if (er_mult>1.0e6)
-					er_mult=1.0e6;
-
-				earthradius*=er_mult;
-			}			 
-		}
-
-		if (strcmp(argv[x],"-gc")==0)
-		{
-			z=x+1;
-
-			if (z<=y && argv[z][0] && argv[z][0]!='-')
-			{
-				sscanf(argv[z],"%lf",&clutter);
-
-				if (clutter<0.0)
-					clutter=0.0;
-			}			 
-		}
-
-		if (strcmp(argv[x],"-fz")==0)
-		{
-			z=x+1;
-
-			if (z<=y && argv[z][0] && argv[z][0]!='-')
-			{
-				sscanf(argv[z],"%lf",&fzone_clearance);
-
-				if (fzone_clearance<0.0 || fzone_clearance>100.0)
-					fzone_clearance=60.0;
-
-				fzone_clearance/=100.0;
-			}
-		}
-
-		if (strcmp(argv[x],"-o")==0)
-		{
-			z=x+1;
-
-			if (z<=y && argv[z][0] && argv[z][0]!='-')
-				strncpy(mapfile,argv[z],253);
-			map=1;
-		}
-
-		if (strcmp(argv[x],"-log")==0)
-		{
-			z=x+1;
-
-			logfile[0]=0;
-
-			if (z<=y && argv[z][0] && argv[z][0]!='-')
-				strncpy(logfile,argv[z],253);
-
-			command_line_log=1;
-		}
-
-		if (strcmp(argv[x],"-udt")==0)
-		{
-			z=x+1;
-
-			if (z<=y && argv[z][0] && argv[z][0]!='-')
-				strncpy(udt_file,argv[z],253);
-		}
-
-		if (strcmp(argv[x],"-c")==0)
-		{
-			z=x+1;
-
-			if (z<=y && argv[z][0] && argv[z][0]!='-')
-			{
-				sscanf(argv[z],"%lf",&altitude);
-				map=1;
-				coverage=1;
-				area_mode=1;
-				max_txsites=4;
-			}
-		}
-
-		if (strcmp(argv[x],"-db")==0 || strcmp(argv[x],"-dB")==0)
-		{
-			z=x+1;
-
-			if (z<=y && argv[z][0]) /* A minus argument is legal here */
-				sscanf(argv[z],"%d",&contour_threshold);
-		}
-
-		if (strcmp(argv[x],"-p")==0)
-		{ 
-			z=x+1;
-
-			if (z<=y && argv[z][0] && argv[z][0]!='-')
-			{
-				strncpy(terrain_file,argv[z],253);
-				terrain_plot=1;
-				pt2pt_mode=1;
-			}
-		}
-
-		if (strcmp(argv[x],"-e")==0)
-		{
-			z=x+1;
-
-			if (z<=y && argv[z][0] && argv[z][0]!='-')
-			{
-				strncpy(elevation_file,argv[z],253);
-				elevation_plot=1;
-				pt2pt_mode=1;
-			}
-		}
-
-		if (strcmp(argv[x],"-h")==0 || strcmp(argv[x],"-H")==0)
-		{
-			z=x+1;
-
-			if (z<=y && argv[z][0] && argv[z][0]!='-')
-			{
-				strncpy(height_file,argv[z],253);
-				height_plot=1;
-				pt2pt_mode=1;
-			}
-
-			if (strcmp(argv[x],"-H")==0)
-				norm=1;
-			else
-				norm=0;
-		}
-
-		if (strcmp(argv[x],"-metric")==0)
-			metric=1;
-
-		if (strcmp(argv[x],"-gpsav")==0)
-			gpsav=1;
-
-		if (strcmp(argv[x],"-geo")==0)
-			geo=1;
-
-		if (strcmp(argv[x],"-kml")==0)
-			kml=1;
-
-		if (strcmp(argv[x],"-nf")==0)
-			fresnel_plot=0;
-
-		if (strcmp(argv[x],"-ngs")==0)
-			ngs=1;
-
-		if (strcmp(argv[x],"-n")==0)
-			nolospath=1;
-
-		if (strcmp(argv[x],"-dbm")==0)
-			dbm=1;
-
-		if (strcmp(argv[x],"-sc")==0)
-			smooth_contours=1;
-
-		if (strcmp(argv[x],"-olditm")==0)
-			olditm=1;
-
-		if (strcmp(argv[x],"-N")==0)
-		{
-			nolospath=1;
-			nositereports=1;
-		}
-
-		if (strcmp(argv[x],"-d")==0)
-		{
-			z=x+1;
-
-			if (z<=y && argv[z][0] && argv[z][0]!='-')
-				strncpy(sdf_path,argv[z],253);
-		}
-
-		if (strcmp(argv[x],"-t")==0)
-		{
-			/* Read Transmitter Location */
-
-			z=x+1;
-
-			while (z<=y && argv[z][0] && argv[z][0]!='-' && txsites<30)
-			{
-				strncpy(txfile,argv[z],253);
-				tx_site[txsites]=LoadQTH(txfile);
-				txsites++;
-				z++;
-			}
-
-			z--;
-		}
-
-		if (strcmp(argv[x],"-L")==0)
-		{
-			z=x+1;
-
-			if (z<=y && argv[z][0] && argv[z][0]!='-')
-			{
-				sscanf(argv[z],"%lf",&altitudeLR);
-				map=1;
-				LRmap=1;
-				area_mode=1;
-
-				if (coverage)
-					fprintf(stdout,"c and L are exclusive options, ignoring L.\n");
-			}
-		}
-
-		if (strcmp(argv[x],"-l")==0)
-		{
-			z=x+1;
-
-			if (z<=y && argv[z][0] && argv[z][0]!='-')
-			{
-				strncpy(longley_file,argv[z],253);
-				longley_plot=1;
-				pt2pt_mode=1;
-			}
-		}
-
-		if (strcmp(argv[x],"-r")==0)
-		{
-			/* Read Receiver Location */
-
-			z=x+1;
-
-			if (z<=y && argv[z][0] && argv[z][0]!='-')
-			{
-				strncpy(rxfile,argv[z],253);
-				rx_site=LoadQTH(rxfile);
-				rxsite=1;
-				pt2pt_mode=1;
-			}
-		}
-
-		if (strcmp(argv[x],"-s")==0)
-		{
-			/* Read city file(s) */
-
-			z=x+1;
-
-			while (z<=y && argv[z][0] && argv[z][0]!='-' && cities<5)
-			{
-				strncpy(city_file[cities],argv[z],253);
-				cities++;
-				z++;
-			}
-
-			z--;
-		}
-
-		if (strcmp(argv[x],"-b")==0)
-		{
-			/* Read Boundary File(s) */
-
-			z=x+1;
-
-			while (z<=y && argv[z][0] && argv[z][0]!='-' && bfs<5)
-			{
-				strncpy(boundary_file[bfs],argv[z],253);
-				bfs++;
-				z++;
-			}
-
-			z--;
-		}
-		
-		if (strcmp(argv[x],"-f")==0)
-		{
-			z=x+1;
-
-			if (z<=y && argv[z][0] && argv[z][0]!='-')
-			{
-				sscanf(argv[z],"%lf",&forced_freq);
-
-				if (forced_freq<20.0)
-					forced_freq=0.0;
-
-				if (forced_freq>20.0e3)
-					forced_freq=20.0e3;
-			}
-		}
-
-		if (strcmp(argv[x],"-erp")==0)
-		{
-			z=x+1;
-
-			if (z<=y && argv[z][0] && argv[z][0]!='-')
-			{
-				sscanf(argv[z],"%lf",&forced_erp);
-
-				if (forced_erp<0.0)
-					forced_erp=-1.0;
-			}			 
-		}
-
-		if (strcmp(argv[x],"-ano")==0)
-		{
-			z=x+1;
-
-			if (z<=y && argv[z][0] && argv[z][0]!='-')
-				strncpy(ano_filename,argv[z],253);
-		}
-
-		if (strcmp(argv[x],"-ani")==0)
-		{
-			z=x+1;
-
-			if (z<=y && argv[z][0] && argv[z][0]!='-')
-				strncpy(ani_filename,argv[z],253);
-		}
-	}
-
-	/* Perform some error checking on the arguments
-	   and switches parsed from the command-line.
-	   If an error is encountered, print a message
-	   and exit gracefully. */
-
-	if (txsites==0)
-	{
-		fprintf(stderr,"\n%c*** ERROR: No transmitter site(s) specified!\n\n",7);
-		exit (-1);
-	}
-
-	for (x=0, y=0; x<txsites; x++)
-	{
-		if (tx_site[x].lat==91.0 && tx_site[x].lon==361.0)
-		{
-			fprintf(stderr,"\n*** ERROR: Transmitter site #%d not found!",x+1);
-			y++;
-		}
-	}
-
-	if (y)
-	{
-		fprintf(stderr,"%c\n\n",7);
-		exit (-1);
-	}
-
-	if ((coverage+LRmap+ani_filename[0])==0 && rx_site.lat==91.0 && rx_site.lon==361.0)
-	{
-		if (max_range!=0.0 && txsites!=0)
-		{
-			/* Plot topographic map of radius "max_range" */
-
-			map=0;
-			topomap=1;
-		}
-
-		else
-		{
-			fprintf(stderr,"\n%c*** ERROR: No receiver site found or specified!\n\n",7);
-			exit (-1);
-		}
-	}
-
-	/* No major errors were detected.  Whew!  :-) */
-
-	/* Adjust input parameters if -metric option is used */
-
-	if (metric)
-	{
-		altitudeLR/=METERS_PER_FOOT;	/* meters --> feet */
-		max_range/=KM_PER_MILE;		/* kilometers --> miles */
-		altitude/=METERS_PER_FOOT;	/* meters --> feet */
-		clutter/=METERS_PER_FOOT;	/* meters --> feet */
-	}
-
-	/* If no SDF path was specified on the command line (-d), check
-	   for a path specified in the $HOME/.splat_path file.  If the
-	   file is not found, then sdf_path[] remains NULL, and the
-	   current working directory is assumed to contain the SDF
-	   files. */
-
-	if (sdf_path[0]==0)
-	{
-		env=getenv("HOME");
-		snprintf(string,253,"%s/.splat_path",env);
-		fd=fopen(string,"r");
-
-		if (fd!=NULL)
-		{
-			fgets(string,253,fd);
-
-			/* Remove <CR> and/or <LF> from string */
-
-			for (x=0; string[x]!=13 && string[x]!=10 && string[x]!=0 && x<253; x++);
-			string[x]=0;
-
-			strncpy(sdf_path,string,253);
-
-			fclose(fd);
-		}
-	}
-
-	/* Ensure a trailing '/' is present in sdf_path */
-
-	if (sdf_path[0])
-	{
-		x=strlen(sdf_path);
-
-		if (sdf_path[x-1]!='/' && x!=0)
-		{
-			sdf_path[x]='/';
-			sdf_path[x+1]=0;
-		}
-	}
-
-	fprintf(stdout,"%s",header);
-	fflush(stdout);
-
-	if (ani_filename[0])
-	{
-		ReadLRParm(tx_site[0],0); /* Get ERP status */
-		y=LoadANO(ani_filename);
-
-		for (x=0; x<txsites && x<max_txsites; x++)
-			PlaceMarker(tx_site[x]);
-
-		if (rxsite)
-			PlaceMarker(rx_site);
-
-		if (bfs)
-		{
-			for (x=0; x<bfs; x++)
-				LoadBoundaries(boundary_file[x]);
-
-			fprintf(stdout,"\n");
-			fflush(stdout);
-		}
-
-		if (cities)
-		{
-			for (x=0; x<cities; x++)
-				LoadCities(city_file[x]);
-
-			fprintf(stdout,"\n");
-			fflush(stdout);
-		}
-
-		if (LR.erp==0.0)
-			WritePPMLR(mapfile,geo,kml,ngs,tx_site,txsites);
-		else
-		{
-		       	if (dbm)
-				WritePPMDBM(mapfile,geo,kml,ngs,tx_site,txsites);
-			else
-				WritePPMSS(mapfile,geo,kml,ngs,tx_site,txsites);
-		}
-
-		exit(0);
-	}
-
-	x=0;
-	y=0;
-
-	min_lat=90;
-	max_lat=-90;
-
-	min_lon=(int)floor(tx_site[0].lon);
-	max_lon=(int)floor(tx_site[0].lon);
-
-	for (y=0, z=0; z<txsites && z<max_txsites; z++)
-	{
-		txlat=(int)floor(tx_site[z].lat);
-		txlon=(int)floor(tx_site[z].lon);
-
-		if (txlat<min_lat)
-			min_lat=txlat;
-
-		if (txlat>max_lat)
-			max_lat=txlat;
-
-		if (LonDiff(txlon,min_lon)<0.0)
-			min_lon=txlon;
-
-		if (LonDiff(txlon,max_lon)>=0.0)
-			max_lon=txlon;
-	}
-
-	if (rxsite)
-	{
-		rxlat=(int)floor(rx_site.lat);
-		rxlon=(int)floor(rx_site.lon);
-
-		if (rxlat<min_lat)
-			min_lat=rxlat;
-
-		if (rxlat>max_lat)
-			max_lat=rxlat;
-
-		if (LonDiff(rxlon,min_lon)<0.0)
-			min_lon=rxlon;
-
-		if (LonDiff(rxlon,max_lon)>=0.0)
-			max_lon=rxlon;
-	}
-
-	/* Load the required SDF files */ 
-
-	LoadTopoData(max_lon, min_lon, max_lat, min_lat);
-
-	if (area_mode || topomap)
-	{
-		for (z=0; z<txsites && z<max_txsites; z++)
-		{
-			/* "Ball park" estimates used to load any additional
-			   SDF files required to conduct this analysis. */
-
-			tx_range=sqrt(1.5*(tx_site[z].alt+GetElevation(tx_site[z])));
-
-			if (LRmap)
-				rx_range=sqrt(1.5*altitudeLR);
-			else
-				rx_range=sqrt(1.5*altitude);
-
-			/* deg_range determines the maximum
-			   amount of topo data we read */
-
-			deg_range=(tx_range+rx_range)/57.0;
-
-			/* max_range regulates the size of the
-			   analysis.  A small, non-zero amount can
-			   be used to shrink the size of the analysis
-			   and limit the amount of topo data read by
-			   SPLAT!  A large number will increase the
-			   width of the analysis and the size of
-			   the map. */
-
-			if (max_range==0.0)
-				max_range=tx_range+rx_range;
-
-			deg_range=max_range/57.0;
-
-			/* Prevent the demand for a really wide coverage
-			   from allocating more "pages" than are available
-			   in memory. */
-
-			switch (MAXPAGES)
-			{
-				case 1: deg_limit=0.125;
-					break;
-
-				case 2: deg_limit=0.25;
-					break;
-
-				case 4: deg_limit=0.5;
-					break;
-
-				case 9: deg_limit=1.0;
-					break;
-
-				case 16: deg_limit=1.5;  /* WAS 2.0 */
-					break;
-
-				case 25: deg_limit=2.0;  /* WAS 3.0 */
-					break;
-
-				case 36: deg_limit=2.5;	 /* New! */
-					break;
-
-				case 49: deg_limit=3.0;  /* New! */
-					break;
-
-				case 64: deg_limit=3.5;  /* New! */
-					break;
-			}
-
-			if (fabs(tx_site[z].lat)<70.0)
-				deg_range_lon=deg_range/cos(DEG2RAD*tx_site[z].lat);
-			else
-				deg_range_lon=deg_range/cos(DEG2RAD*70.0);
-
-			/* Correct for squares in degrees not being square in miles */  
-
-			if (deg_range>deg_limit)
-				deg_range=deg_limit;
-
-			if (deg_range_lon>deg_limit)
-				deg_range_lon=deg_limit;
-
-			north_min=(int)floor(tx_site[z].lat-deg_range);
-			north_max=(int)floor(tx_site[z].lat+deg_range);
-
-			west_min=(int)floor(tx_site[z].lon-deg_range_lon);
-
-			while (west_min<0)
-				west_min+=360;
-
-			while (west_min>=360)
-				west_min-=360;
-
-			west_max=(int)floor(tx_site[z].lon+deg_range_lon);
-
-			while (west_max<0)
-				west_max+=360;
-
-			while (west_max>=360)
-				west_max-=360;
-
-			if (north_min<min_lat)
-				min_lat=north_min;
-
-			if (north_max>max_lat)
-				max_lat=north_max;
-
-			if (LonDiff(west_min,min_lon)<0.0)
-				min_lon=west_min;
-
-			if (LonDiff(west_max,max_lon)>=0.0)
-				max_lon=west_max;
-		}
-
-		/* Load any additional SDF files, if required */ 
-
-		LoadTopoData(max_lon, min_lon, max_lat, min_lat);
-	}
-	
-	if (udt_file[0])
-		LoadUDT(udt_file);
-
-
-	/***** Let the SPLATting begin! *****/
-
-	if (pt2pt_mode)
-	{
-		PlaceMarker(rx_site);
-
-		if (terrain_plot)
-		{
-			/* Extract extension (if present)
-			   from "terrain_file" */
-
-			y=strlen(terrain_file);
-
-			for (x=y-1; x>0 && terrain_file[x]!='.'; x--);
-
-			if (x>0)  /* Extension found */
-			{
-				for (z=x+1; z<=y && (z-(x+1))<10; z++)
-					ext[z-(x+1)]=tolower(terrain_file[z]);
-
-				ext[z-(x+1)]=0;	    /* Ensure an ending 0 */
-				terrain_file[x]=0;  /* Chop off extension */
-			}
-
-			else
-				strncpy(ext,"png\0",4);
-		}
-
-		if (elevation_plot)
-		{
-			/* Extract extension (if present)
-			   from "elevation_file" */
-
-			y=strlen(elevation_file);
-
-			for (x=y-1; x>0 && elevation_file[x]!='.'; x--);
-
-			if (x>0)  /* Extension found */
-			{
-				for (z=x+1; z<=y && (z-(x+1))<10; z++)
-					ext[z-(x+1)]=tolower(elevation_file[z]);
-
-				ext[z-(x+1)]=0;       /* Ensure an ending 0 */
-				elevation_file[x]=0;  /* Chop off extension */
-			}
-
-			else
-				strncpy(ext,"png\0",4);
-		}
-
-		if (height_plot)
-		{
-			/* Extract extension (if present)
-			   from "height_file" */
-
-			y=strlen(height_file);
-
-			for (x=y-1; x>0 && height_file[x]!='.'; x--);
-
-			if (x>0)  /* Extension found */
-			{
-				for (z=x+1; z<=y && (z-(x+1))<10; z++)
-					ext[z-(x+1)]=tolower(height_file[z]);
-
-				ext[z-(x+1)]=0;    /* Ensure an ending 0 */
-				height_file[x]=0;  /* Chop off extension */
-			}
-
-			else
-				strncpy(ext,"png\0",4);
-		}
-
-		if (longley_plot)
-		{
-			/* Extract extension (if present)
-			   from "longley_file" */
-
-			y=strlen(longley_file);
-
-			for (x=y-1; x>0 && longley_file[x]!='.'; x--);
-
-			if (x>0)  /* Extension found */
-			{
-				for (z=x+1; z<=y && (z-(x+1))<10; z++)
-					ext[z-(x+1)]=tolower(longley_file[z]);
-
-				ext[z-(x+1)]=0;     /* Ensure an ending 0 */
-				longley_file[x]=0;  /* Chop off extension */
-			}
-
-			else
-				strncpy(ext,"png\0",4);
-		}
-
-		for (x=0; x<txsites && x<4; x++)
-		{
-			PlaceMarker(tx_site[x]);
-
-			if (nolospath==0)
-			{
-				switch (x)
-				{
-					case 0:
-						PlotPath(tx_site[x],rx_site,1);
-						break;
-
-					case 1:
-						PlotPath(tx_site[x],rx_site,8);
-						break;
-
-					case 2:
-						PlotPath(tx_site[x],rx_site,16);
-						break;
-
-					case 3:
-						PlotPath(tx_site[x],rx_site,32);
-				}
-			}
-
-			if (nositereports==0)
-				SiteReport(tx_site[x]);
-
-			if (kml)
-				WriteKML(tx_site[x],rx_site);
-
-			if (txsites>1)
-				snprintf(string,250,"%s-%c.%s%c",longley_file,'1'+x,ext,0);
-			else
-				snprintf(string,250,"%s.%s%c",longley_file,ext,0);
-
-			if (nositereports==0)
-			{
-				if (longley_file[0]==0)
-				{
-					ReadLRParm(tx_site[x],0);
-					PathReport(tx_site[x],rx_site,string,0);
-				}
-
-				else
-				{
-					ReadLRParm(tx_site[x],1);
-					PathReport(tx_site[x],rx_site,string,longley_file[0]);
-				}
-			}
-
-			if (terrain_plot)
-			{
-				if (txsites>1)
-					snprintf(string,250,"%s-%c.%s%c",terrain_file,'1'+x,ext,0);
-				else
-					snprintf(string,250,"%s.%s%c",terrain_file,ext,0);
-
-				GraphTerrain(tx_site[x],rx_site,string);
-			}
-
-			if (elevation_plot)
-			{
-				if (txsites>1)
-					snprintf(string,250,"%s-%c.%s%c",elevation_file,'1'+x,ext,0);
-				else
-					snprintf(string,250,"%s.%s%c",elevation_file,ext,0);
-
-				GraphElevation(tx_site[x],rx_site,string);
-			}
-
-			if (height_plot)
-			{
-				if (txsites>1)
-					snprintf(string,250,"%s-%c.%s%c",height_file,'1'+x,ext,0);
-				else
-					snprintf(string,250,"%s.%s%c",height_file,ext,0);
-
-				GraphHeight(tx_site[x],rx_site,string,fresnel_plot,norm);
-			}
-		}
-	}
-
-	if (area_mode && topomap==0)
-	{
-		for (x=0; x<txsites && x<max_txsites; x++)
-		{
-			if (coverage)
-				PlotLOSMap(tx_site[x],altitude);
-
-			else if (ReadLRParm(tx_site[x],1))
-					PlotLRMap(tx_site[x],altitudeLR,ano_filename);
-
-			SiteReport(tx_site[x]);
-		}
-	}
-
-	if (map || topomap)
-	{
-		/* Label the map */
-
-		if (kml==0)
-		{
-			for (x=0; x<txsites && x<max_txsites; x++)
-				PlaceMarker(tx_site[x]);
-		}
-
-		if (cities)
-		{
-
-			for (y=0; y<cities; y++)
-				LoadCities(city_file[y]);
-
-			fprintf(stdout,"\n");
-			fflush(stdout);
-		}
-
-		/* Load city and county boundary data files */
-
-		if (bfs)
-		{
-			for (y=0; y<bfs; y++)
-				LoadBoundaries(boundary_file[y]);
-
-			fprintf(stdout,"\n");
-			fflush(stdout);
-		}
-
-		/* Plot the map */
-
-		if (coverage || pt2pt_mode || topomap)
-			WritePPM(mapfile,geo,kml,ngs,tx_site,txsites);
-
-		else
-		{
-			if (LR.erp==0.0)
-				WritePPMLR(mapfile,geo,kml,ngs,tx_site,txsites);
-			else
-				if (dbm)
-					WritePPMDBM(mapfile,geo,kml,ngs,tx_site,txsites);
-				else
-					WritePPMSS(mapfile,geo,kml,ngs,tx_site,txsites);
-		}
-	}
-
-	if (command_line_log && strlen(logfile)>0)
-	{
-		fd=fopen(logfile,"w");
-
-		if (fd!=NULL)
-		{
-			for (x=0; x<argc; x++)
-				fprintf(fd,"%s ",argv[x]);
-
-			fprintf(fd,"\n");
-
-			fclose(fd);
-
-			fprintf(stdout,"\nCommand-line parameter log written to: \"%s\"\n",logfile);
-			
-		}
-	}
-
-	printf("\n");
-
-	/* That's all, folks! */
-
-	return 0;
-}
