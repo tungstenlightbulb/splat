@@ -2,7 +2,7 @@
 #
 # Simple shell script for installing SPLAT! and associated utilities.
 # Written by John A. Magliacane, KD2BD April 2002.
-# Last update: March 1, 2008.
+# Last update: March X, XXXX.
 #
 
 install_splat()
@@ -10,11 +10,6 @@ install_splat()
 	if [ -x splat ]; then
 		cp splat /usr/local/bin
 		echo "SPLAT! installed!"
-	fi
-
-	if [ -x splat-hd ]; then
-		cp splat-hd /usr/local/bin
-		echo "SPLAT!-HD installed!"
 	fi
 }
 
