@@ -23,7 +23,7 @@ fi
 build_splat()
 {
 	echo -n "Compiling SPLAT!"
-	g++ -O2 -s -fomit-frame-pointer -ffast-math -pipe -march=$cpu $model itwom3.0.cpp splat.cpp -lm -lbz2 -o splat
+	g++ -O2 -fomit-frame-pointer -ffast-math -pipe -march=$cpu $model main.cpp itwom3.0.cpp splat.cpp -lm -lbz2 -o splat
 
 	if [ -x splat ]; then
 		echo "Done!"
