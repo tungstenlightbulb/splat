@@ -27,6 +27,9 @@
 #include <ctype.h>
 #include <bzlib.h>
 #include <unistd.h>
+#include <vector>
+#include "path.h"
+#include "dem.h"
 #include "fontdata.h"
 #include "splat.h"
 #include "itwom3.0.h"
@@ -55,12 +58,13 @@ double	earthradius, max_range=0.0, forced_erp=-1.0, dpp, ppd,
 	fzone_clearance=0.6, forced_freq, clutter;
 
 int	min_north=90, max_north=-90, min_west=360, max_west=-1, ippd, mpi,
-	max_elevation=-32768, min_elevation=32768, bzerror, contour_threshold;
+	max_elevation=-32768, min_elevation=32768, bzerror, contour_threshold,
+    maxpages=16, arraysize=-1;
 
 unsigned char got_elevation_pattern, got_azimuth_pattern, metric=0, dbm=0, smooth_contours=0;
 struct site *site;
 
-struct path *path;
+Path *path;
 
 struct LR *LR;
 
@@ -200,7 +204,7 @@ char *dec2dms(double decimal)
 	return (string);
 }
 
-int PutMask(double lat, double lon, int value, dem dem[])
+int PutMask(double lat, double lon, int value, std::vector<Dem> &dem)
 {
 	/* Lines, text, markings, and coverage areas are stored in a
 	   mask that is combined with topology data when topographic
@@ -211,7 +215,7 @@ int PutMask(double lat, double lon, int value, dem dem[])
 	int	x = 0, y = 0, indx;
 	char	found;
 
-	for (indx=0, found=0; indx<MAXPAGES && found==0;)
+	for (indx=0, found=0; indx<maxpages && found==0;)
 	{
 		x=(int)rint(ppd*(lat-dem[indx].min_north));
 		y=mpi-(int)rint(ppd*(LonDiff(dem[indx].max_west,lon)));
@@ -224,15 +228,15 @@ int PutMask(double lat, double lon, int value, dem dem[])
 
 	if (found)
 	{
-		dem[indx].mask[x][y]=value;
-		return ((int)dem[indx].mask[x][y]);
+		dem[indx].mask[x * ippd + y]=value;
+		return ((int)dem[indx].mask[x * ippd + y]);
 	}
 
 	else
 		return -1;
 }
 
-int OrMask(double lat, double lon, int value, dem dem[])
+int OrMask(double lat, double lon, int value, std::vector<Dem> &dem)
 {
 	/* Lines, text, markings, and coverage areas are stored in a
 	   mask that is combined with topology data when topographic
@@ -243,7 +247,7 @@ int OrMask(double lat, double lon, int value, dem dem[])
 	int	x = 0, y = 0, indx;
 	char	found;
 
-	for (indx=0, found=0; indx<MAXPAGES && found==0;)
+	for (indx=0, found=0; indx<maxpages && found==0;)
 	{
 		x=(int)rint(ppd*(lat-dem[indx].min_north));
 		y=mpi-(int)rint(ppd*(LonDiff(dem[indx].max_west,lon)));
@@ -256,15 +260,15 @@ int OrMask(double lat, double lon, int value, dem dem[])
 
 	if (found)
 	{
-		dem[indx].mask[x][y]|=value;
-		return ((int)dem[indx].mask[x][y]);
+		dem[indx].mask[x * ippd + y]|=value;
+		return ((int)dem[indx].mask[x * ippd + y]);
 	}
 
 	else
 		return -1;
 }
 
-int GetMask(double lat, double lon, dem dem[])
+int GetMask(double lat, double lon, std::vector<Dem> &dem)
 {
 	/* This function returns the mask bits based on the latitude
 	   and longitude given. */
@@ -272,7 +276,7 @@ int GetMask(double lat, double lon, dem dem[])
 	return (OrMask(lat,lon,0, dem));
 }
 
-int PutSignal(double lat, double lon, unsigned char signal, dem dem[])
+int PutSignal(double lat, double lon, unsigned char signal, std::vector<Dem> &dem)
 {
 	/* This function writes a signal level (0-255)
 	   at the specified location for later recall. */
@@ -280,7 +284,7 @@ int PutSignal(double lat, double lon, unsigned char signal, dem dem[])
 	int	x = 0, y = 0, indx;
 	char	found;
 
-	for (indx=0, found=0; indx<MAXPAGES && found==0;)
+	for (indx=0, found=0; indx<maxpages && found==0;)
 	{
 		x=(int)rint(ppd*(lat-dem[indx].min_north));
 		y=mpi-(int)rint(ppd*(LonDiff(dem[indx].max_west,lon)));
@@ -293,15 +297,15 @@ int PutSignal(double lat, double lon, unsigned char signal, dem dem[])
 
 	if (found)
 	{
-		dem[indx].signal[x][y]=signal;
-		return (dem[indx].signal[x][y]);
+		dem[indx].signal[x * ippd + y]=signal;
+		return (dem[indx].signal[x * ippd + y]);
 	}
 
 	else
 		return 0;
 }
 
-unsigned char GetSignal(double lat, double lon, dem dem[])
+unsigned char GetSignal(double lat, double lon, std::vector<Dem> &dem)
 {
 	/* This function reads the signal level (0-255) at the
 	   specified location that was previously written by the
@@ -310,7 +314,7 @@ unsigned char GetSignal(double lat, double lon, dem dem[])
 	int	x = 0, y = 0, indx;
 	char	found;
 
-	for (indx=0, found=0; indx<MAXPAGES && found==0;)
+	for (indx=0, found=0; indx<maxpages && found==0;)
 	{
 		x=(int)rint(ppd*(lat-dem[indx].min_north));
 		y=mpi-(int)rint(ppd*(LonDiff(dem[indx].max_west,lon)));
@@ -322,12 +326,12 @@ unsigned char GetSignal(double lat, double lon, dem dem[])
 	}
 
 	if (found)
-		return (dem[indx].signal[x][y]);
+		return (dem[indx].signal[x * ippd + y]);
 	else
 		return 0;
 }
 
-double GetElevation(struct site location, dem dem[])
+double GetElevation(struct site location, std::vector<Dem> &dem)
 {
 	/* This function returns the elevation (in feet) of any location
 	   represented by the digital elevation model data in memory.
@@ -337,7 +341,7 @@ double GetElevation(struct site location, dem dem[])
 	int	x = 0, y = 0, indx;
 	double	elevation;
 
-	for (indx=0, found=0; indx<MAXPAGES && found==0;)
+	for (indx=0, found=0; indx<maxpages && found==0;)
 	{
 		x=(int)rint(ppd*(location.lat-dem[indx].min_north));
 		y=mpi-(int)rint(ppd*(LonDiff(dem[indx].max_west,location.lon)));
@@ -349,14 +353,14 @@ double GetElevation(struct site location, dem dem[])
 	}
 
 	if (found)
-		elevation=3.28084*dem[indx].data[x][y];
+		elevation=3.28084*dem[indx].data[x * ippd + y];
 	else
 		elevation=-5000.0;
 	
 	return elevation;
 }
 
-int AddElevation(double lat, double lon, double height, dem dem[])
+int AddElevation(double lat, double lon, double height, std::vector<Dem> &dem)
 {
 	/* This function adds a user-defined terrain feature
 	   (in meters AGL) to the digital elevation model data
@@ -366,7 +370,7 @@ int AddElevation(double lat, double lon, double height, dem dem[])
 	char	found;
 	int	x = 0, y = 0, indx;
 
-	for (indx=0, found=0; indx<MAXPAGES && found==0;)
+	for (indx=0, found=0; indx<maxpages && found==0;)
 	{
 		x=(int)rint(ppd*(lat-dem[indx].min_north));
 		y=mpi-(int)rint(ppd*(LonDiff(dem[indx].max_west,lon)));
@@ -378,7 +382,7 @@ int AddElevation(double lat, double lon, double height, dem dem[])
 	}
 
 	if (found)
-		dem[indx].data[x][y]+=(short)rint(height);
+		dem[indx].data[x * ippd + y]+=(short)rint(height);
 
 	return found;
 }
@@ -452,7 +456,7 @@ double Azimuth(struct site source, struct site destination)
 	return (azimuth/DEG2RAD);		
 }
 
-double ElevationAngle(struct site source, struct site destination,dem dem[])
+double ElevationAngle(struct site source, struct site destination, std::vector<Dem> &dem)
 {
 	/* This function returns the angle of elevation (in degrees)
 	   of the destination as seen from the source location.
@@ -473,7 +477,7 @@ double ElevationAngle(struct site source, struct site destination,dem dem[])
 	return ((180.0*(acos(((b*b)+(dx*dx)-(a*a))/(2.0*b*dx)))/PI)-90.0);
 }
 
-void ReadPath(struct site source, struct site destination,dem dem[])
+void ReadPath(struct site source, struct site destination, std::vector<Dem> &dem)
 {
 	/* This function generates a sequence of latitude and
 	   longitude positions between source and destination
@@ -531,7 +535,7 @@ void ReadPath(struct site source, struct site destination,dem dem[])
 		path->distance[c]=0.0;
 	}
 
-	for (distance=0.0, c=0; (total_distance!=0.0 && distance<=total_distance && c<ARRAYSIZE); c++, distance=miles_per_sample*(double)c)
+	for (distance=0.0, c=0; (total_distance!=0.0 && distance<=total_distance && c<arraysize); c++, distance=miles_per_sample*(double)c)
 	{
 		beta=distance/3959.0;
 		lat2=asin(sin(lat1)*cos(beta)+cos(azimuth)*sin(beta)*cos(lat1));
@@ -564,6 +568,7 @@ void ReadPath(struct site source, struct site destination,dem dem[])
 		lat2=lat2/DEG2RAD;
 		lon2=lon2/DEG2RAD;
 
+        // TODO: Sometimes we get EXEC_BAD_ACCESS here
 		path->lat[c]=lat2;
 		path->lon[c]=lon2;
 		tempsite.lat=lat2;
@@ -574,7 +579,7 @@ void ReadPath(struct site source, struct site destination,dem dem[])
 
 	/* Make sure exact destination point is recorded at path->length-1 */
 
-	if (c<ARRAYSIZE)
+	if (c<arraysize)
 	{
 		path->lat[c]=destination.lat;
 		path->lon[c]=destination.lon;
@@ -583,13 +588,13 @@ void ReadPath(struct site source, struct site destination,dem dem[])
 		c++;
 	}
 
-	if (c<ARRAYSIZE)
+	if (c<arraysize)
 		path->length=c;
 	else
-		path->length=ARRAYSIZE-1;
+		path->length=arraysize-1;
 }
 
-double ElevationAngle2(struct site source, struct site destination, double er, dem dem[])
+double ElevationAngle2(struct site source, struct site destination, double er, std::vector<Dem> &dem)
 {
 	/* This function returns the angle of elevation (in degrees)
 	   of the destination as seen from the source location, UNLESS
@@ -658,7 +663,7 @@ double ElevationAngle2(struct site source, struct site destination, double er, d
 	return elevation;
 }
 
-double AverageTerrain(struct site source, double azimuthx, double start_distance, double end_distance,dem dem[])
+double AverageTerrain(struct site source, double azimuthx, double start_distance, double end_distance, std::vector<Dem> &dem)
 {
 	/* This function returns the average terrain calculated in
 	   the direction of "azimuth" (degrees) between "start_distance"
@@ -752,7 +757,7 @@ double AverageTerrain(struct site source, double azimuthx, double start_distance
 	}
 }
 
-double haat(struct site antenna, dem dem[])
+double haat(struct site antenna, std::vector<Dem> &dem)
 {
 	/* This function returns the antenna's Height Above Average
 	   Terrain (HAAT) based on FCC Part 73.313(d).  If a critical
@@ -791,7 +796,7 @@ double haat(struct site antenna, dem dem[])
 	}
 }
 
-void PlaceMarker(struct site location, dem dem[])
+void PlaceMarker(struct site location, std::vector<Dem> &dem)
 {
 	/* This function places text and marker data in the mask array
 	   for illustration on topographic maps generated by SPLAT!.
@@ -1529,7 +1534,7 @@ void LoadPAT(char *filename)
 	}
 }
 
-int LoadSDF_SDF(char *name, dem dem[])
+int LoadSDF_SDF(char *name, std::vector<Dem> &dem)
 {
 	/* This function reads uncompressed SPLAT Data Files (.sdf)
 	   containing digital elevation model data into memory.
@@ -1559,7 +1564,7 @@ int LoadSDF_SDF(char *name, dem dem[])
 
 	/* Is it already in memory? */
 
-	for (indx=0, found=0; indx<MAXPAGES && found==0; indx++)
+	for (indx=0, found=0; indx<maxpages && found==0; indx++)
 	{
 		if (minlat==dem[indx].min_north && minlon==dem[indx].min_west && maxlat==dem[indx].max_north && maxlon==dem[indx].max_west)
 			found=1;
@@ -1569,14 +1574,14 @@ int LoadSDF_SDF(char *name, dem dem[])
 
 	if (found==0)
 	{	
-		for (indx=0, free_page=0; indx<MAXPAGES && free_page==0; indx++)
+		for (indx=0, free_page=0; indx<maxpages && free_page==0; indx++)
 			if (dem[indx].max_north==-90)
 				free_page=1;
 	}
 
 	indx--;
 
-	if (free_page && found==0 && indx>=0 && indx<MAXPAGES)
+	if (free_page && found==0 && indx>=0 && indx<maxpages)
 	{
 		/* Search for SDF file in current working directory first */
 
@@ -1618,9 +1623,9 @@ int LoadSDF_SDF(char *name, dem dem[])
 					fgets(line,19,fd);
 					data=atoi(line);
 
-					dem[indx].data[x][y]=data;
-					dem[indx].signal[x][y]=0;
-					dem[indx].mask[x][y]=0;
+					dem[indx].data[x * ippd + y]=data;
+					dem[indx].signal[x * ippd + y]=0;
+					dem[indx].mask[x * ippd + y]=0;
 
 					if (data>dem[indx].max_el)
 						dem[indx].max_el=data;
@@ -1758,7 +1763,7 @@ char *BZfgets(BZFILE *bzfd, unsigned length)
 	return (output);
 }
 
-int LoadSDF_BZ(char *name, dem dem[])
+int LoadSDF_BZ(char *name, std::vector<Dem> &dem)
 {
 	/* This function reads .bz2 compressed SPLAT Data Files containing
 	   digital elevation model data into memory.  Elevation data,
@@ -1792,7 +1797,7 @@ int LoadSDF_BZ(char *name, dem dem[])
 
 	/* Is it already in memory? */
 
-	for (indx=0, found=0; indx<MAXPAGES && found==0; indx++)
+	for (indx=0, found=0; indx<maxpages && found==0; indx++)
 	{
 		if (minlat==dem[indx].min_north && minlon==dem[indx].min_west && maxlat==dem[indx].max_north && maxlon==dem[indx].max_west)
 			found=1;
@@ -1802,14 +1807,14 @@ int LoadSDF_BZ(char *name, dem dem[])
 
 	if (found==0)
 	{	
-		for (indx=0, free_page=0; indx<MAXPAGES && free_page==0; indx++)
+		for (indx=0, free_page=0; indx<maxpages && free_page==0; indx++)
 			if (dem[indx].max_north==-90)
 				free_page=1;
 	}
 
 	indx--;
 
-	if (free_page && found==0 && indx>=0 && indx<MAXPAGES)
+	if (free_page && found==0 && indx>=0 && indx<maxpages)
 	{
 		/* Search for SDF file in current working directory first */
 
@@ -1846,9 +1851,9 @@ int LoadSDF_BZ(char *name, dem dem[])
 					string=BZfgets(bzfd,20);
 					data=atoi(string);
 
-					dem[indx].data[x][y]=data;
-					dem[indx].signal[x][y]=0;
-					dem[indx].mask[x][y]=0;
+					dem[indx].data[x * ippd + y]=data;
+					dem[indx].signal[x * ippd + y]=0;
+					dem[indx].mask[x * ippd + y]=0;
 
 					if (data>dem[indx].max_el)
 						dem[indx].max_el=data;
@@ -1929,7 +1934,7 @@ int LoadSDF_BZ(char *name, dem dem[])
 		return 0;
 }
 
-char LoadSDF(char *name, dem dem[])
+char LoadSDF(char *name, std::vector<Dem> &dem)
 {
 	/* This function loads the requested SDF file from the filesystem.
 	   It first tries to invoke the LoadSDF_SDF() function to load an
@@ -1963,7 +1968,7 @@ char LoadSDF(char *name, dem dem[])
 
 		/* Is it already in memory? */
 
-		for (indx=0, found=0; indx<MAXPAGES && found==0; indx++)
+		for (indx=0, found=0; indx<maxpages && found==0; indx++)
 		{
 			if (minlat==dem[indx].min_north && minlon==dem[indx].min_west && maxlat==dem[indx].max_north && maxlon==dem[indx].max_west)
 				found=1;
@@ -1973,14 +1978,14 @@ char LoadSDF(char *name, dem dem[])
 
 		if (found==0)
 		{	
-			for (indx=0, free_page=0; indx<MAXPAGES && free_page==0; indx++)
+			for (indx=0, free_page=0; indx<maxpages && free_page==0; indx++)
 				if (dem[indx].max_north==-90)
 					free_page=1;
 		}
 
 		indx--;
 
-		if (free_page && found==0 && indx>=0 && indx<MAXPAGES)
+		if (free_page && found==0 && indx>=0 && indx<maxpages)
 		{
 			fprintf(stdout,"Region  \"%s\" assumed as sea-level into page %d...",name,indx+1);
 			fflush(stdout);
@@ -1995,9 +2000,9 @@ char LoadSDF(char *name, dem dem[])
 			for (x=0; x<ippd; x++)
 				for (y=0; y<ippd; y++)
 				{
-		    			dem[indx].data[x][y]=0;
-					dem[indx].signal[x][y]=0;
-					dem[indx].mask[x][y]=0;
+		    			dem[indx].data[x * ippd + y]=0;
+					dem[indx].signal[x * ippd + y]=0;
+					dem[indx].mask[x * ippd + y]=0;
 
 					if (dem[indx].min_el>0)
 						dem[indx].min_el=0;
@@ -2067,7 +2072,7 @@ char LoadSDF(char *name, dem dem[])
 	return return_value;
 }
 
-void LoadCities(char *filename, dem dem[])
+void LoadCities(char *filename, std::vector<Dem> &dem)
 {
 	/* This function reads SPLAT! city/site files, and plots
 	   the locations and names of the cities and site locations
@@ -2129,7 +2134,7 @@ void LoadCities(char *filename, dem dem[])
 		fprintf(stderr,"\n*** ERROR: \"%s\": not found!",filename);
 }
 
-void LoadUDT(char *filename, dem dem[])
+void LoadUDT(char *filename, std::vector<Dem> &dem)
 {
 	/* This function reads a file containing User-Defined Terrain
 	   features for their addition to the digital elevation model
@@ -2287,7 +2292,7 @@ void LoadUDT(char *filename, dem dem[])
 	fprintf(stdout,"\n");
 }
 
-void LoadBoundaries(char *filename, dem dem[])
+void LoadBoundaries(char *filename, std::vector<Dem> &dem)
 {
 	/* This function reads Cartographic Boundary Files available from
 	   the U.S. Census Bureau, and plots the data contained in those
@@ -2607,7 +2612,7 @@ char ReadLRParm(struct site txsite, char forced_read)
 	return (return_value);
 }
 
-void PlotPath(struct site source, struct site destination, char mask_value, dem dem[])
+void PlotPath(struct site source, struct site destination, char mask_value, std::vector<Dem> &dem)
 {
 	/* This function analyzes the path between the source and
 	   destination locations.  It determines which points along
@@ -2665,7 +2670,7 @@ void PlotPath(struct site source, struct site destination, char mask_value, dem 
 	}
 }
 
-void PlotLRPath(struct site source, struct site destination, unsigned char mask_value, FILE *fd, double elev[], dem dem[])
+void PlotLRPath(struct site source, struct site destination, unsigned char mask_value, FILE *fd, double elev[], std::vector<Dem> &dem)
 {
 	/* This function plots the RF path loss between source and
 	   destination points based on the ITWOM propagation model,
@@ -2914,7 +2919,7 @@ void PlotLRPath(struct site source, struct site destination, unsigned char mask_
 	}
 }
 
-void PlotLOSMap(struct site source, double altitude,dem dem[])
+void PlotLOSMap(struct site source, double altitude, std::vector<Dem> &dem)
 {
 	/* This function performs a 360 degree sweep around the
 	   transmitter site (source location), and plots the
@@ -3088,7 +3093,7 @@ void PlotLOSMap(struct site source, double altitude,dem dem[])
 	}
 }
 
-void PlotLRMap(struct site source, double altitude, char *plo_filename, double elev[], dem dem[])
+void PlotLRMap(struct site source, double altitude, char *plo_filename, double elev[], std::vector<Dem> &dem)
 {
 	/* This function performs a 360 degree sweep around the
 	   transmitter site (source location), and plots the
@@ -3762,7 +3767,7 @@ void LoadDBMColors(struct site xmtr)
 	}
 }
 
-void WritePPM(char *filename, unsigned char geo, unsigned char kml, unsigned char ngs, struct site *xmtr, unsigned char txsites, dem dem[])
+void WritePPM(char *filename, unsigned char geo, unsigned char kml, unsigned char ngs, struct site *xmtr, unsigned char txsites, std::vector<Dem> &dem)
 {
 	/* This function generates a topographic map in Portable Pix Map
 	   (PPM) format based on logarithmically scaled topology data,
@@ -3914,7 +3919,7 @@ void WritePPM(char *filename, unsigned char geo, unsigned char kml, unsigned cha
 			if (lon<0.0)
 				lon+=360.0;
 
-			for (indx=0, found=0; indx<MAXPAGES && found==0;)
+			for (indx=0, found=0; indx<maxpages && found==0;)
 			{
 				x0=(int)rint(ppd*(lat-(double)dem[indx].min_north));
 				y0=mpi-(int)rint(ppd*(LonDiff((double)dem[indx].max_west,lon)));
@@ -3927,7 +3932,7 @@ void WritePPM(char *filename, unsigned char geo, unsigned char kml, unsigned cha
 
 			if (found)
 			{
-				mask=dem[indx].mask[x0][y0];
+				mask=dem[indx].mask[x0 *ippd + y0];
 
 				if (mask&2)
 					/* Text Labels: Red */
@@ -4020,12 +4025,12 @@ void WritePPM(char *filename, unsigned char geo, unsigned char kml, unsigned cha
 					else
 					{
 						/* Sea-level: Medium Blue */
-						if (dem[indx].data[x0][y0]==0)
+						if (dem[indx].data[x0 *ippd + y0]==0)
 							fprintf(fd,"%c%c%c",0,0,170);
 						else
 						{
 							/* Elevation: Greyscale */
-							terrain=(unsigned)(0.5+pow((double)(dem[indx].data[x0][y0]-min_elevation),one_over_gamma)*conversion);
+							terrain=(unsigned)(0.5+pow((double)(dem[indx].data[x0 *ippd + y0]-min_elevation),one_over_gamma)*conversion);
 							fprintf(fd,"%c%c%c",terrain,terrain,terrain);
 						}
 					}
@@ -4047,7 +4052,7 @@ void WritePPM(char *filename, unsigned char geo, unsigned char kml, unsigned cha
 	fflush(stdout);
 }
 
-void WritePPMLR(char *filename, unsigned char geo, unsigned char kml, unsigned char ngs, struct site *xmtr, unsigned char txsites, dem dem[])
+void WritePPMLR(char *filename, unsigned char geo, unsigned char kml, unsigned char ngs, struct site *xmtr, unsigned char txsites, std::vector<Dem> &dem)
 {
 	/* This function generates a topographic map in Portable Pix Map
 	   (PPM) format based on the content of flags held in the mask[][] 
@@ -4248,7 +4253,7 @@ void WritePPMLR(char *filename, unsigned char geo, unsigned char kml, unsigned c
 			if (lon<0.0)
 				lon+=360.0;
 
-			for (indx=0, found=0; indx<MAXPAGES && found==0;)
+			for (indx=0, found=0; indx<maxpages && found==0;)
 			{
 				x0=(int)rint(ppd*(lat-(double)dem[indx].min_north));
 				y0=mpi-(int)rint(ppd*(LonDiff((double)dem[indx].max_west,lon)));
@@ -4261,8 +4266,8 @@ void WritePPMLR(char *filename, unsigned char geo, unsigned char kml, unsigned c
 
 			if (found)
 			{
-				mask=dem[indx].mask[x0][y0];
-				loss=(dem[indx].signal[x0][y0]);
+				mask=dem[indx].mask[x0 *ippd + y0];
+				loss=(dem[indx].signal[x0 *ippd + y0]);
 				cityorcounty=0;
 
 				match=255;
@@ -4330,11 +4335,11 @@ void WritePPMLR(char *filename, unsigned char geo, unsigned char kml, unsigned c
 						{
 							/* Display land or sea elevation */
 
-							if (dem[indx].data[x0][y0]==0)
+							if (dem[indx].data[x0 *ippd + y0]==0)
 								fprintf(fd,"%c%c%c",0,0,170);
 							else
 							{
-								terrain=(unsigned)(0.5+pow((double)(dem[indx].data[x0][y0]-min_elevation),one_over_gamma)*conversion);
+								terrain=(unsigned)(0.5+pow((double)(dem[indx].data[x0 *ippd + y0]-min_elevation),one_over_gamma)*conversion);
 								fprintf(fd,"%c%c%c",terrain,terrain,terrain);
 							}
 						}
@@ -4349,12 +4354,12 @@ void WritePPMLR(char *filename, unsigned char geo, unsigned char kml, unsigned c
 
 						else  /* terrain / sea-level */
 						{
-							if (dem[indx].data[x0][y0]==0)
+							if (dem[indx].data[x0 *ippd + y0]==0)
 								fprintf(fd,"%c%c%c",0,0,170);
 							else
 							{
 								/* Elevation: Greyscale */
-								terrain=(unsigned)(0.5+pow((double)(dem[indx].data[x0][y0]-min_elevation),one_over_gamma)*conversion);
+								terrain=(unsigned)(0.5+pow((double)(dem[indx].data[x0 *ippd + y0]-min_elevation),one_over_gamma)*conversion);
 								fprintf(fd,"%c%c%c",terrain,terrain,terrain);
 							}
 						}
@@ -4526,7 +4531,7 @@ void WritePPMLR(char *filename, unsigned char geo, unsigned char kml, unsigned c
 	fflush(stdout);
 }
 
-void WritePPMSS(char *filename, unsigned char geo, unsigned char kml, unsigned char ngs, struct site *xmtr, unsigned char txsites, dem dem[])
+void WritePPMSS(char *filename, unsigned char geo, unsigned char kml, unsigned char ngs, struct site *xmtr, unsigned char txsites, std::vector<Dem> &dem)
 {
 	/* This function generates a topographic map in Portable Pix Map
 	   (PPM) format based on the signal strength values held in the
@@ -4726,7 +4731,7 @@ void WritePPMSS(char *filename, unsigned char geo, unsigned char kml, unsigned c
 			if (lon<0.0)
 				lon+=360.0;
 
-			for (indx=0, found=0; indx<MAXPAGES && found==0;)
+			for (indx=0, found=0; indx<maxpages && found==0;)
 			{
 				x0=(int)rint(ppd*(lat-(double)dem[indx].min_north));
 				y0=mpi-(int)rint(ppd*(LonDiff((double)dem[indx].max_west,lon)));
@@ -4739,8 +4744,8 @@ void WritePPMSS(char *filename, unsigned char geo, unsigned char kml, unsigned c
 
 			if (found)
 			{
-				mask=dem[indx].mask[x0][y0];
-				signal=(dem[indx].signal[x0][y0])-100;
+				mask=dem[indx].mask[x0 *ippd + y0];
+				signal=(dem[indx].signal[x0 *ippd + y0])-100;
 				cityorcounty=0;
 
 				match=255;
@@ -4808,11 +4813,11 @@ void WritePPMSS(char *filename, unsigned char geo, unsigned char kml, unsigned c
 						{
 							/* Display land or sea elevation */
 
-							if (dem[indx].data[x0][y0]==0)
+							if (dem[indx].data[x0 *ippd + y0]==0)
 								fprintf(fd,"%c%c%c",0,0,170);
 							else
 							{
-								terrain=(unsigned)(0.5+pow((double)(dem[indx].data[x0][y0]-min_elevation),one_over_gamma)*conversion);
+								terrain=(unsigned)(0.5+pow((double)(dem[indx].data[x0 *ippd + y0]-min_elevation),one_over_gamma)*conversion);
 								fprintf(fd,"%c%c%c",terrain,terrain,terrain);
 							}
 						}
@@ -4831,12 +4836,12 @@ void WritePPMSS(char *filename, unsigned char geo, unsigned char kml, unsigned c
 								fprintf(fd,"%c%c%c",255,255,255);
 							else
 							{
-								if (dem[indx].data[x0][y0]==0)
+								if (dem[indx].data[x0 *ippd + y0]==0)
 									fprintf(fd,"%c%c%c",0,0,170);
 								else
 								{
 									/* Elevation: Greyscale */
-									terrain=(unsigned)(0.5+pow((double)(dem[indx].data[x0][y0]-min_elevation),one_over_gamma)*conversion);
+									terrain=(unsigned)(0.5+pow((double)(dem[indx].data[x0 *ippd + y0]-min_elevation),one_over_gamma)*conversion);
 									fprintf(fd,"%c%c%c",terrain,terrain,terrain);
 								}
 							}
@@ -5040,7 +5045,7 @@ void WritePPMSS(char *filename, unsigned char geo, unsigned char kml, unsigned c
 	fflush(stdout);
 }
 
-void WritePPMDBM(char *filename, unsigned char geo, unsigned char kml, unsigned char ngs, struct site *xmtr, unsigned char txsites, dem dem[])
+void WritePPMDBM(char *filename, unsigned char geo, unsigned char kml, unsigned char ngs, struct site *xmtr, unsigned char txsites, std::vector<Dem> &dem)
 {
 	/* This function generates a topographic map in Portable Pix Map
 	   (PPM) format based on the signal power level values held in the
@@ -5240,7 +5245,7 @@ void WritePPMDBM(char *filename, unsigned char geo, unsigned char kml, unsigned 
 			if (lon<0.0)
 				lon+=360.0;
 
-			for (indx=0, found=0; indx<MAXPAGES && found==0;)
+			for (indx=0, found=0; indx<maxpages && found==0;)
 			{
 				x0=(int)rint(ppd*(lat-(double)dem[indx].min_north));
 				y0=mpi-(int)rint(ppd*(LonDiff((double)dem[indx].max_west,lon)));
@@ -5253,8 +5258,8 @@ void WritePPMDBM(char *filename, unsigned char geo, unsigned char kml, unsigned 
 
 			if (found)
 			{
-				mask=dem[indx].mask[x0][y0];
-				dBm=(dem[indx].signal[x0][y0])-200;
+				mask=dem[indx].mask[x0 *ippd + y0];
+				dBm=(dem[indx].signal[x0 *ippd + y0])-200;
 				cityorcounty=0;
 
 				match=255;
@@ -5322,11 +5327,11 @@ void WritePPMDBM(char *filename, unsigned char geo, unsigned char kml, unsigned 
 						{
 							/* Display land or sea elevation */
 
-							if (dem[indx].data[x0][y0]==0)
+							if (dem[indx].data[x0 *ippd + y0]==0)
 								fprintf(fd,"%c%c%c",0,0,170);
 							else
 							{
-								terrain=(unsigned)(0.5+pow((double)(dem[indx].data[x0][y0]-min_elevation),one_over_gamma)*conversion);
+								terrain=(unsigned)(0.5+pow((double)(dem[indx].data[x0 *ippd + y0]-min_elevation),one_over_gamma)*conversion);
 								fprintf(fd,"%c%c%c",terrain,terrain,terrain);
 							}
 						}
@@ -5345,12 +5350,12 @@ void WritePPMDBM(char *filename, unsigned char geo, unsigned char kml, unsigned 
 								fprintf(fd,"%c%c%c",255,255,255);
 							else
 							{
-								if (dem[indx].data[x0][y0]==0)
+								if (dem[indx].data[x0 *ippd + y0]==0)
 									fprintf(fd,"%c%c%c",0,0,170);
 								else
 								{
 									/* Elevation: Greyscale */
-									terrain=(unsigned)(0.5+pow((double)(dem[indx].data[x0][y0]-min_elevation),one_over_gamma)*conversion);
+									terrain=(unsigned)(0.5+pow((double)(dem[indx].data[x0 *ippd + y0]-min_elevation),one_over_gamma)*conversion);
 									fprintf(fd,"%c%c%c",terrain,terrain,terrain);
 								}
 							}
@@ -5630,7 +5635,7 @@ void WritePPMDBM(char *filename, unsigned char geo, unsigned char kml, unsigned 
 	fflush(stdout);
 }
 
-void GraphTerrain(struct site source, struct site destination, char *name,dem dem[])
+void GraphTerrain(struct site source, struct site destination, char *name,std::vector<Dem> &dem)
 {
 	/* This function invokes gnuplot to generate an appropriate
 	   output file indicating the terrain profile between the source
@@ -5791,7 +5796,7 @@ void GraphTerrain(struct site source, struct site destination, char *name,dem de
 		fprintf(stderr,"\n*** ERROR: Error occurred invoking gnuplot!\n");
 }
 
-void GraphElevation(struct site source, struct site destination, char *name, dem dem[])
+void GraphElevation(struct site source, struct site destination, char *name, std::vector<Dem> &dem)
 {
 	/* This function invokes gnuplot to generate an appropriate
 	   output file indicating the terrain elevation profile between
@@ -5993,7 +5998,7 @@ void GraphElevation(struct site source, struct site destination, char *name, dem
 		fprintf(stderr,"\n*** ERROR: Error occurred invoking gnuplot!\n");
 }
 
-void GraphHeight(struct site source, struct site destination, char *name, unsigned char fresnel_plot, unsigned char normalized,dem dem[])
+void GraphHeight(struct site source, struct site destination, char *name, unsigned char fresnel_plot, unsigned char normalized,std::vector<Dem> &dem)
 {
 	/* This function invokes gnuplot to generate an appropriate
 	   output file indicating the terrain height profile between
@@ -6374,7 +6379,7 @@ void GraphHeight(struct site source, struct site destination, char *name, unsign
 		fprintf(stderr,"\n*** ERROR: Error occurred invoking gnuplot!\n");
 }
 
-void ObstructionAnalysis(struct site xmtr, struct site rcvr, double f, FILE *outfile,dem dem[])
+void ObstructionAnalysis(struct site xmtr, struct site rcvr, double f, FILE *outfile,std::vector<Dem> &dem)
 {
 	/* Perform an obstruction analysis along the
 	   path between receiver and transmitter. */
@@ -6549,7 +6554,7 @@ void ObstructionAnalysis(struct site xmtr, struct site rcvr, double f, FILE *out
 	}
 }
 
-void PathReport(struct site source, struct site destination, char *name, char graph_it, double elev[],dem dem[])
+void PathReport(struct site source, struct site destination, char *name, char graph_it, double elev[],std::vector<Dem> &dem)
 {
 	/* This function writes a SPLAT! Path Report (name.txt) to
 	   the filesystem.  If (graph_it == 1), then gnuplot is invoked
@@ -7188,7 +7193,7 @@ void PathReport(struct site source, struct site destination, char *name, char gr
 		unlink("profile.gp");
 }
 
-void SiteReport(struct site xmtr,dem dem[])
+void SiteReport(struct site xmtr,std::vector<Dem> &dem)
 {
 	char	report_name[80];
 	double	terrain;
@@ -7269,7 +7274,7 @@ void SiteReport(struct site xmtr,dem dem[])
 	fprintf(stdout,"\nSite analysis report written to: \"%s\"\n",report_name);
 }
 
-void LoadTopoData(int max_lon, int min_lon, int max_lat, int min_lat, dem dem[])
+void LoadTopoData(int max_lon, int min_lon, int max_lat, int min_lat, std::vector<Dem> &dem)
 {
 	/* This function loads the SDF files required
 	   to cover the limits of the region specified. */ 
@@ -7337,7 +7342,7 @@ void LoadTopoData(int max_lon, int min_lon, int max_lat, int min_lat, dem dem[])
 	}
 }
 
-int LoadANO(char *filename, dem dem[])
+int LoadANO(char *filename, std::vector<Dem> &dem)
 {
 	/* This function reads a SPLAT! alphanumeric output 
 	   file (-ani option) for analysis and/or map generation. */
@@ -7451,7 +7456,7 @@ int LoadANO(char *filename, dem dem[])
 	return error;
 }
 
-void WriteKML(struct site source, struct site destination,dem dem[])
+void WriteKML(struct site source, struct site destination,std::vector<Dem> &dem)
 {
 	int	x, y;
 	char	block, report_name[80];

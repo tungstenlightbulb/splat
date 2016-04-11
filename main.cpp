@@ -8,11 +8,16 @@
 
 #include <iostream>
 #include <math.h>
+#include <vector>
+#include "path.h"
+#include "dem.h"
 #include "splat.h"
 #include "itwom3.0.h"
 
 int main(int argc, const char * argv[])
 {
+    bool hd_mode = false;
+    
     int		x, y, z=0, min_lat, min_lon, max_lat, max_lon,
     rxlat, rxlon, txlat, txlon, west_min, west_max,
     north_min, north_max;
@@ -30,7 +35,7 @@ int main(int argc, const char * argv[])
     string[255], rxfile[255], *env=NULL,
     txfile[255], boundary_file[5][255],
     udt_file[255], rxsite=0, ani_filename[255],
-    ano_filename[255], ext[20], logfile[255];
+    ano_filename[255], ext[20], logfile[255], maxpages_str[255];
     
     double		altitude=0.0, altitudeLR=0.0, tx_range=0.0,
     rx_range=0.0, deg_range=0.0, deg_limit=0.0,
@@ -42,10 +47,7 @@ int main(int argc, const char * argv[])
     
     strncpy(splat_version,"1.4.2\0",6);
     
-    if (HD_MODE==1)
-        strncpy(splat_name,"SPLAT! HD\0",10);
-    else
-        strncpy(splat_name,"SPLAT!\0",7);
+    strncpy(splat_name,"SPLAT!\0",7);
     
     strncpy(dashes,"---------------------------------------------------------------------------\0",76);
     
@@ -88,38 +90,21 @@ int main(int argc, const char * argv[])
         fprintf(stdout,"     -log copy command line string to this output file\n");
         fprintf(stdout,"   -gpsav preserve gnuplot temporary working files after SPLAT! execution\n");
         fprintf(stdout,"  -metric employ metric rather than imperial units for all user I/O\n");
-        fprintf(stdout,"  -olditm invoke Longley-Rice rather than the default ITWOM model\n\n");
+        fprintf(stdout,"  -olditm invoke Longley-Rice rather than the default ITWOM model\n");
+        fprintf(stdout,"-maxpages [%d] Maximum Analysis Region capability: 1, 4, 9, 16, 25, 36, 49, 64 \n", maxpages);
+        fprintf(stdout,"      -hd Enable HD mode.");
+        fprintf(stdout,"\n");
         fprintf(stdout,"If that flew by too fast, consider piping the output through 'less':\n");
         
-        if (HD_MODE==0)
-            fprintf(stdout,"\n\tsplat | less\n\n");
-        else
-            fprintf(stdout,"\n\tsplat-hd | less\n\n");
+        fprintf(stdout,"\n\tsplat | less\n\n");
         
         fprintf(stdout,"Type 'man splat', or see the documentation for more details.\n\n");
-        
-        y=(int)sqrt((int)MAXPAGES);
-        
-        fprintf(stdout,"This compilation of %s supports analysis over a region of %d square\n",splat_name,y);
-        
-        if (y==1)
-            
-            fprintf(stdout,"degree");
-        else
-            fprintf(stdout,"degrees");
-        
-        fprintf(stdout," of terrain, and computes signal levels using ITWOM Version %.1f.\n\n",ITWOMVersion());
         fflush(stdout);
         
         return 1;
     }
     
     y=argc-1;
-    
-    path = new struct path();
-    LR = new struct LR();
-    struct dem *dem = new struct dem[MAXPAGES];
-    double *elev = new double[ARRAYSIZE+10];
     
     olditm=0;
     kml=0;
@@ -138,7 +123,6 @@ int main(int argc, const char * argv[])
     terrain_file[0]=0;
     sdf_path[0]=0;
     udt_file[0]=0;
-    path->length=0;
     max_txsites=30;
     fzone_clearance=0.6;
     contour_threshold=0;
@@ -150,10 +134,7 @@ int main(int argc, const char * argv[])
     smooth_contours=0;
     earthradius=EARTHRADIUS;
     
-    ippd=IPPD;		/* pixels per degree (integer) */
-    ppd=(double)ippd;	/* pixels per degree (double)  */
-    dpp=1.0/ppd;		/* degrees per pixel */
-    mpi=ippd-1;		/* maximum pixel index per degree */
+
     
     sprintf(header,"\n\t\t--==[ Welcome To %s v%s ]==--\n\n", splat_name, splat_version);
     
@@ -161,16 +142,6 @@ int main(int argc, const char * argv[])
     {
         tx_site[x].lat=91.0;
         tx_site[x].lon=361.0;
-    }
-    
-    for (x=0; x<MAXPAGES; x++)
-    {
-        dem[x].min_el=32768;
-        dem[x].max_el=-32768;
-        dem[x].min_north=90;
-        dem[x].max_north=-90;
-        dem[x].min_west=360;
-        dem[x].max_west=-1;
     }
     
     /* Scan for command line arguments */
@@ -511,6 +482,27 @@ int main(int argc, const char * argv[])
             if (z<=y && argv[z][0] && argv[z][0]!='-')
                 strncpy(ani_filename,argv[z],253);
         }
+        
+        if (strcmp(argv[x],"-maxpages")==0)
+        {
+            z=x+1;
+            
+            if (z<=y && argv[z][0] && argv[z][0]!='-')
+            {
+                strncpy(maxpages_str,argv[z],sizeof(maxpages_str));
+                maxpages_str[sizeof(maxpages_str) - 1] = '\0';
+                if (sscanf(maxpages_str, "%d", &maxpages) != 1)
+                {
+                    fprintf(stderr,"\n%c*** ERROR: Could not parse maxpages: %s\n\n", 7, maxpages_str);
+                    exit (-1);
+                }
+            }
+        }
+        
+        if (strcmp(argv[x],"-hd")==0)
+        {
+            hd_mode = true;
+        }
     }
     
     /* Perform some error checking on the arguments
@@ -555,6 +547,100 @@ int main(int argc, const char * argv[])
             exit (-1);
         }
     }
+    
+    switch (maxpages)
+    {
+        case 1:
+            if (!hd_mode)
+            {
+                fprintf(stderr,"\n%c*** ERROR: -maxpages must be >= 4 if not in HD mode!\n\n",7);
+                exit (-1);
+            }
+            arraysize = 5092;
+            break;
+        case 4:
+            arraysize = hd_mode ? 14844 : 4950;
+            break;
+
+        case 9:
+            arraysize = hd_mode ? 32600 : 10870;
+            break;
+
+        case 16:
+            arraysize = hd_mode ? 57713 : 19240;
+            break;
+
+        case 25:
+            arraysize = hd_mode ? 90072 : 30025;
+            break;
+
+        case 36:
+            arraysize = hd_mode ? 129650 : 43217;
+            break;
+
+        case 49:
+            arraysize = hd_mode ? 176437 : 58813;
+            break;
+
+        case 64:
+            arraysize = hd_mode ? 230430 : 76810;
+            break;
+        default:
+            fprintf(stderr,"\n%c*** ERROR: -maxpages must be one of 1, 4, 9, 16, 25, 36, 49, 64\n\n",7);
+            exit (-1);
+    }
+    
+    ippd = hd_mode ? 3600 : 1200; /* pixels per degree (integer) */
+    
+    std::vector<Dem> dem(maxpages, Dem(ippd));
+    
+    double *elev = new double[arraysize+10];
+    if (elev == NULL)
+    {
+        fprintf(stderr,"\n%c*** ERROR: Could not allocate memory for elev with -maxpages == %d\n\n",7, maxpages);
+        exit (-1);
+    }
+    
+    path = new Path(arraysize);
+    if (path == NULL)
+    {
+        fprintf(stderr,"\n%c*** ERROR: Could not allocate memory for path with -maxpages == %d\n\n",7, maxpages);
+        exit (-1);
+    }
+    path->length=0;
+    
+    LR = new struct LR();
+    if (LR == NULL)
+    {
+        fprintf(stderr,"\n%c*** ERROR: Could not allocate memory for LR with -maxpages == %d\n\n",7, maxpages);
+        exit (-1);
+    }
+    
+    int degrees=(int)sqrt((int)maxpages);
+    
+    fprintf(stdout,"This invocation of %s supports analysis over a region of %d square\n",splat_name,degrees);
+    
+    if (degrees==1)
+        fprintf(stdout,"degree");
+    else
+        fprintf(stdout,"degrees");
+    
+    fprintf(stdout," of terrain, and computes signal levels using ITWOM Version %.1f.\n\n",ITWOMVersion());
+
+    
+    for (x=0; x < maxpages; x++)
+    {
+        dem[x].min_el=32768;
+        dem[x].max_el=-32768;
+        dem[x].min_north=90;
+        dem[x].max_north=-90;
+        dem[x].min_west=360;
+        dem[x].max_west=-1;
+    }
+    
+    ppd=(double)ippd;	/* pixels per degree (double)  */
+    dpp=1.0/ppd;		/* degrees per pixel */
+    mpi=ippd-1;		/* maximum pixel index per degree */
     
     /* No major errors were detected.  Whew!  :-) */
     
@@ -738,7 +824,7 @@ int main(int argc, const char * argv[])
              from allocating more "pages" than are available
              in memory. */
             
-            switch (MAXPAGES)
+            switch (maxpages)
             {
                 case 1: deg_limit=0.125;
                     break;
@@ -1082,10 +1168,12 @@ int main(int argc, const char * argv[])
     printf("\n");
     
     /* That's all, folks! */
-    
-    delete path;
+ 
+    // TODO: Why can't we delete? It complains about items already being deleted?!
+    //delete path;
     delete LR;
-    delete[] dem;
+    // TODO: Why can't we clear. It complains about items already being deleted?!
+    //dem.clear();
     delete[] elev;
     
     return 0;
