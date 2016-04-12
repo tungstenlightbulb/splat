@@ -22,6 +22,7 @@ fi
 
 build_splat()
 {
+<<<<<<< HEAD
 	if [ -r std-parms.h ]; then
 		cp std-parms.h splat.h
 	else
@@ -34,12 +35,17 @@ build_splat()
 
 	echo -n "Compiling SPLAT!... "
 	g++ -O2 -fomit-frame-pointer -ffast-math -pipe -march=$cpu $model itwom3.0.cpp splat.cpp -lm -lbz2 -o splat
+=======
+	echo -n "Compiling SPLAT!"
+	g++ -O2 -fomit-frame-pointer -ffast-math -pipe -march=$cpu $model main.cpp itwom3.0.cpp splat.cpp path.cpp dem.cpp -lm -lbz2 -o splat
+>>>>>>> runtime-maxpages
 
 	if [ -x splat ]; then
 		echo "Done!"
 	else
 		echo "Compilation failed!"
 	fi
+<<<<<<< HEAD
 
 	if [ -r hd-parms.h ]; then
 		cp hd-parms.h splat.h
@@ -52,6 +58,8 @@ build_splat()
 			echo "Compilation failed!"
 		fi
 	fi
+=======
+>>>>>>> runtime-maxpages
 }
 
 build_utils()

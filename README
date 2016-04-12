@@ -39,13 +39,13 @@ Unpack the tar.gz file in a source code directory (such as /usr/src
 under Slackware) as 'root':
 
 	cd /usr/src
-	tar xvfz splat-1.4.1.tar.gz
+	tar xvfz splat-1.4.2.tar.gz
 
-This action will generate a subdirectory named splat-1.4.1.
+This action will generate a subdirectory named splat-1.4.2.
 
 Next, cd into the directory:
 
-	cd splat-1.4.1
+	cd splat-1.4.2
 
 Invoke the configure script to build SPLAT! and related utilities:
 
@@ -61,8 +61,8 @@ will be prompted to su to 'root' and invoke the install script manually:
 	exit
 
 Before running SPLAT!, carefully read the documentation located under
-the splat-1.4.1/docs directory for information on the use of the program.
-Some sample data files are located under the splat-1.4.1/sample_data
+the splat-1.4.2/docs directory for information on the use of the program.
+Some sample data files are located under the splat-1.4.2/sample_data
 directory.
 
 REMEMBER: Topography data must be downloaded and SPLAT Data Files must
@@ -93,7 +93,7 @@ $HOME/.splat_path file so SPLAT! can easily find them.
 Please read the README file under the utils directory for information
 on the utilities included with SPLAT!.
 
-Please read the documentation under the splat-1.4.1/docs directory,
+Please read the documentation under the splat-1.4.2/docs directory,
 or consult the program's man page for more information and examples
 of SPLAT! use.
 
@@ -104,5 +104,5 @@ can be found on the SPLAT! Web Site:
 
 --
 John A. Magliacane, KD2BD
-May 2011
+XXX XXXX
 

@@ -257,8 +257,8 @@ double abq_alos(complex<double> r)
 
 double saalos(double d, prop_type &prop, propa_type &propa)
 {
-	double ensa, encca, q, dp, dx, tde, hc, ucrpc, ctip, tip, tic, stic, ctic, sta;	
-	double ttc, cttc, crpc, ssnps, d1a, rsp, tsp, arte, zi, pd, pdk, hone, tvsr;
+	double ensa, encca, q, dp, dx, tde, hc, ucrpc, ctip, tip, tic = 0.0, stic, ctic, sta;
+	double ttc, cttc = 0.0, crpc = 0.0, ssnps = 0.0, d1a, rsp, tsp, arte, zi, pd, pdk, hone, tvsr;
 	double saalosv=0.0;
 	
 	q=0.0;
@@ -2209,7 +2209,7 @@ void qlrpfl(double pfl[], int klimx, int mdvarx, prop_type &prop, propa_type &pr
 void qlrpfl2(double pfl[], int klimx, int mdvarx, prop_type &prop, propa_type &propa, propv_type &propv)
 {
 	int np, j;
-	double xl[2], dlb, q, za, zb, temp, rad, rae1, rae2;
+	double xl[2], dlb, q = 0.0, za, zb, temp, rad, rae1, rae2;
 
 	prop.dist=pfl[0]*pfl[1];
 	np=(int)pfl[0];
@@ -2813,7 +2813,7 @@ double pctTime, double pctLoc, double pctConf, double &dbloss, char *strmode, in
 	prop.dh=deltaH;
 	prop.hg[0]=tht_m;
 	prop.hg[1]=rht_m;
-	propv.klim=(long)radio_climate;
+	propv.klim=radio_climate;
 	prop.encc=enc_ncc_clcref;
 	prop.cch=clutter_height;
 	prop.cd=clutter_density;
@@ -2822,8 +2822,8 @@ double pctTime, double pctLoc, double pctConf, double &dbloss, char *strmode, in
 	prop.kwx=0;
 	ivar=(long)ModVar;
 	ipol=(long)pol;
-	qlrps(frq_mhz, 0.0, eno, ipol, eps, sgm, prop);
-	qlra(kst, propv.klim, ivar, prop, propv);
+	qlrps(frq_mhz, 0.0, eno, (int)ipol, eps, sgm, prop);
+	qlra(kst, propv.klim, (int)ivar, prop, propv);
 
 	if (propv.lvar<1)
 		propv.lvar=1;
