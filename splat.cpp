@@ -1779,7 +1779,7 @@ int LoadSDF_SDF(char *name)
 
 			else
 			{
-				if (fabs(dem[indx].min_west-min_west)<180.0)
+				if (fabs((float) dem[indx].min_west-min_west)<180.0)
 				{
  					if (dem[indx].min_west<min_west)
 						min_west=dem[indx].min_west;
