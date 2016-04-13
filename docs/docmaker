@@ -1,0 +1,18 @@
+#!/bin/bash
+# This script builds the man page, pdf, and postscript
+# and text documentation from the groff source "splat.man".
+DOC_SET_PATH=$1
+
+echo -n "Creating postscript file... "
+groff -e -T ps -man "$DOC_SET_PATH/man/splat.man" > "$DOC_SET_PATH/postscript/splat.ps"
+echo
+echo -n "Creating man page... "
+groff -e -T ascii -man "$DOC_SET_PATH/man/splat.man" > "$DOC_SET_PATH/man/splat.1"
+echo
+echo -n "Creating text file... "
+ul -t dumb "$DOC_SET_PATH/man/splat.1" > "$DOC_SET_PATH/text/splat.txt"
+echo
+echo -n "Creating pdf file... "
+ps2pdf "$DOC_SET_PATH/postscript/splat.ps" "$DOC_SET_PATH/pdf/splat.pdf"
+echo
+echo "Done!"

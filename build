@@ -39,6 +39,14 @@ build_utils()
 	cd ..
 }
 
+build_docs()
+{
+	cd docs
+	./docmaker english
+	./docmaker spanish
+	cd ..
+}
+
 if [ "$#" = "0" ]; then
 	echo "Usage: build  { splat, utils, all }"
 else
@@ -50,14 +58,19 @@ else
 	if [ "$1" = "utils" ]; then
 		build_utils
 	fi
+	
+	if [ "$1" = "docs" ]; then
+		build_docs
+	fi
 
 	if [ "$1" = "all" ]; then
 		build_splat
 		build_utils
+		build_docs
 	fi
 
-	if [ "$1" != "splat" ] && [ "$1" != "utils" ] && [ "$1" != "all" ]; then
-		echo "Usage: build { splat, utils, all }"
+	if [ "$1" != "splat" ] && [ "$1" != "utils" ] && [ "$1" != "docs" ] && [ "$1" != "all" ]; then
+		echo "Usage: build { splat, utils, docs, all }"
 	fi
 fi
 
