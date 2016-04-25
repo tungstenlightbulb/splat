@@ -1,4 +1,5 @@
 add_executable(bearing bearing.c)
+target_link_libraries(bearing m)
 add_executable(citydecoder citydecoder.c)
 add_executable(fontdata fontdata.c)
 target_link_libraries(fontdata z)
@@ -17,4 +18,4 @@ install(TARGETS fontdata DESTINATION bin)
 install(TARGETS srtm2sdf DESTINATION bin)
 install(TARGETS usgs2sdf DESTINATION bin)
 
-install(FILES srtm2sdf-hd DESTINATION bin)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/srtm2sdf-hd" DESTINATION bin)
