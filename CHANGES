@@ -5,6 +5,8 @@ By Peter V. Watkins <watkipet@gmail.com> (XX-XXX-XX)
   Also removed maxpages logic from build to runtime. These are specified 
   with the X and X flags respectively.
 
+* Changed build process from shell scripts over to CMake.
+
 
 ----------------------------------------------------------------------------
 

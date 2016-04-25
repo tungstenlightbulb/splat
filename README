@@ -5,6 +5,8 @@
 
 Requirements
 ============
+SPLAT! builds with CMake version 2.6 or greater.
+
 SPLAT! requires the libbzip2-1.0.1 (or later) compression library and
 header files for successful compilation.  bzip2/libbzip2 is available
 at: http://www.bzip2.org/
@@ -43,27 +45,25 @@ under Slackware) as 'root':
 
 This action will generate a subdirectory named splat-1.4.2.
 
-Next, cd into the directory:
+Next, create your build directory and cd into it:
 
-	cd splat-1.4.2
+	mkdir build && cd build
 
-Invoke the configure script to build SPLAT! and related utilities:
+Run cmake to generate the makefiles:
 
-	./configure
+	cmake ../path/to/splat-1.4.2
 
-If you are 'root', SPLAT! and its related man page and utilities will
-be installed after the compilation process is complete.  If not, you
-will be prompted to su to 'root' and invoke the install script manually:
+Run make to compile:
 
-	su root
-	Password:
-	./install all
-	exit
+	make
 
-Before running SPLAT!, carefully read the documentation located under
-the splat-1.4.2/docs directory for information on the use of the program.
-Some sample data files are located under the splat-1.4.2/sample_data
-directory.
+To install SPLAT!, run make install. You must be root to do this.
+
+	make install
+
+Before running SPLAT!, carefully read the documentation (man splat) for 
+information on the use of the program. Some sample data files are 
+located under the splat-1.4.2/sample_data directory.
 
 REMEMBER: Topography data must be downloaded and SPLAT Data Files must
 be generated using the included srtm2sdf, postdownload, or usgs2sdf

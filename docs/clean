@@ -1,6 +1,0 @@
-#!/bin/bash
-# Simple script to docs
-#
-rm -f english/man/splat.1 english/pdf/splat.pdf english/postscript/splat.ps english/text/splat.txt
-rm -f spanish/man/splat.1 spanish/pdf/splat.pdf spanish/postscript/splat.ps spanish/text/splat.txt
-

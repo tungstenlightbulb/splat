@@ -1,7 +1,0 @@
-#!/bin/bash
-# Simple script to create a clean distribution
-#
-rm -f splat utils/fontdata utils/citydecoder utils/usgs2sdf utils/srtm2sdf utils/srtm2sdf-hd utils/bearing
-cd docs
-./clean
-

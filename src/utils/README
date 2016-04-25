@@ -213,39 +213,12 @@ The bearing utility, however, provides the information quickly and easily
 over great distances without having to run SPLAT!
 
 
-Building The Utilities
+Building and Installing the Utilities
 ======================
-Normally, these utilities are built and installed along with SPLAT!
-when SPLAT!'s ./configure script is invoked.  However, if you modify
-them and/or wish to build and install them separately, here is how it's
-done.  First, invoke the "build" script to compile each or all utilities
-in this directory by name.  For example:
-
-	./build citydecoder
-
-compiles citydecoder only, while
-
-	./build all
-
-compiles all utilities.
-
-
-Installing The Utilities
-========================
-Invoke the "install" script to install each or all utilities in this
-directory by name.  For example:
-
-	./install citydecoder
-
-installs citydecoder only, while
-
-	./install all
-
-installs all utilities.
-
-You need to be 'root' to install any or all of these utilities.
+These utilities are built and installed along with SPLAT!. See the main README 
+for instructions
 
 ---
 John A. Magliacane, KD2BD
-January 2014
+XXXXXXXX 201X
 
