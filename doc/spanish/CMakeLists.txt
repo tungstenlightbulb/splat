@@ -28,7 +28,7 @@ add_custom_command(OUTPUT splat.pdf
 add_custom_target(pdf-es ALL
                   DEPENDS splat.pdf)
 
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/splat.ps" DESTINATION "${DOCDIR}")
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/splat.ps" DESTINATION "${DOCDIR}/es")
 install(FILES splat.man DESTINATION "${MANDIR}/es/man1" RENAME splat.1)
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/splat.txt" DESTINATION "${DOCDIR}")
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/splat.pdf" DESTINATION "${DOCDIR}")
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/splat.txt" DESTINATION "${DOCDIR}/es")
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/splat.pdf" DESTINATION "${DOCDIR}/es")
