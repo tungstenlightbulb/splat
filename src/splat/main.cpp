@@ -9,10 +9,14 @@
 #include <iostream>
 #include <math.h>
 #include <vector>
+#include <cstring>
+#include <cstdlib>
 #include "path.h"
 #include "dem.h"
 #include "splat.h"
 #include "itwom3.0.h"
+
+using namespace std;
 
 int main(int argc, const char * argv[])
 {
