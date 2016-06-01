@@ -1,10 +1,14 @@
 add_executable(bearing bearing.c)
 target_link_libraries(bearing m)
+
 add_executable(citydecoder citydecoder.c)
+
 add_executable(fontdata fontdata.c)
 target_link_libraries(fontdata z)
+
 add_executable(srtm2sdf srtm2sdf.c)
 target_link_libraries(srtm2sdf bz2)
+
 add_executable(usgs2sdf usgs2sdf.c)
 
 add_custom_target(srtm2sdf-hd ALL
