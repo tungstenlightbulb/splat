@@ -56,7 +56,7 @@ Next, build via the commands::
 
 	cd build
 
-	cmake ../src
+	cmake ..
 
 	make
 

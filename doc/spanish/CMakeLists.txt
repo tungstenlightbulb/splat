@@ -8,7 +8,7 @@ add_custom_target(postscript-es ALL
 # Set GROFF_NO_SGR because the following txt rule running ul is incompatible with the 
 # default.
 add_custom_command(OUTPUT splat.1
-                   COMMAND GROFF_NO_SGR=1 && groff -e -T ascii -man ${CMAKE_CURRENT_SOURCE_DIR}/splat.man > splat.1
+                   COMMAND export GROFF_NO_SGR=1 && groff -e -T ascii -man ${CMAKE_CURRENT_SOURCE_DIR}/splat.man > splat.1
                    DEPENDS splat.man
                    COMMENT "Creating man page")
 add_custom_target(man-es ALL
