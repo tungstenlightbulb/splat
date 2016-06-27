@@ -48,7 +48,7 @@ The srtm2sdf utility accepts command-line options as follows:
      processed by the srtm2sdf utility, the -n option need not be
      specified.
 
-Some examples of srtm2sdf use:
+Some examples of srtm2sdf use::
 
     srtm2sdf N40W074.hgt
 
@@ -133,7 +133,9 @@ data files that can be imported into SPLAT! software to annotate
 SPLAT!-generated maps.  Incorporated Places/Census Designated Places
 data files for use with citydecoder may be downloaded from:
 
-http://web.archive.org/web/20130201115142/http://www.census.gov/geo/www/cob/bdy_files.html
+http://web.archive.org/web/20130201115142/
+
+http://www.census.gov/geo/www/cob/bdy_files.html
 
 (Formerly: http://www.census.gov/geo/www/cob/bdy_files.html)
 
@@ -141,7 +143,9 @@ Similarly, County Subdivision files containing the names, locations,
 and boundaries of cities, and smaller towns, townships, and boroughs
 may be downloaded from:
 
-http://web.archive.org/web/20130331172800/http://www.census.gov/geo/www/cob/cs2000.html
+http://web.archive.org/web/20130331172800/
+
+http://www.census.gov/geo/www/cob/cs2000.html
 
 (Formerly: http://www.census.gov/geo/www/cob/cs2000.html)
 
