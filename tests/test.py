@@ -14,7 +14,7 @@ if not sdffn.is_file():
     urllib.request.urlretrieve(url,'N40W074.hgt.zip')
 
     subprocess.run(['unzip','N40W074.hgt.zip'])
-    subprocess.run(['srtm2sdf','N40W074.hgt'])
+    subprocess.run([str(rdir/'utils/srtm2sdf'),'N40W074.hgt'])
 
 print(rdir)
 
