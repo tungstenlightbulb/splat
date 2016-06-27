@@ -1,8 +1,5 @@
 language: c
 
-python:
-    - 3.5
-
 os: 
     - linux
     - osx
@@ -15,10 +12,10 @@ git:
 
 install: 
     - cd build
-    - CC=$COMP cmake ../src
+    - cmake ../src
     - make
     - cd ..
 
 script:
-    - python tests/test.py
+    - python3 tests/test.py
 
