@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from zipfile import ZipFile
 from pathlib import Path
 import subprocess
 import urllib.request
@@ -13,16 +14,15 @@ sdffn=Path('40:41:73:74.sdf')
 if not sdffn.is_file():
     urllib.request.urlretrieve(url,'N40W074.hgt.zip')
 
-    subprocess.run(['unzip','N40W074.hgt.zip'])
+    ZipFile('N40W074.hgt.zip').extract('N40W074.hgt')
+
     subprocess.run([str(rdir/'build/utils/srtm2sdf'),'N40W074.hgt'])
 
 print(rdir)
 
 subprocess.run([str(rdir/'build/splat/splat'),'-metric',
                 '-t',str(rdir/'tests/wnye.qth'),
-                '-o','topo.ppm',
-                '-r',str(rdir/'tests/oyster.qth'),
-                '-e','el.png','-p','tests/terr.png'])
+                '-r',str(rdir/'tests/oyster.qth')])
 #%% load output
 out = {}
 with open(ofn,'r',encoding='iso-8859-1') as f:
