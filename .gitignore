@@ -1,0 +1,7 @@
+*.sdf
+build/
+*.zip
+*.hgt
+*.txt
+*.png
+*.ppm
