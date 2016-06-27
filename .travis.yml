@@ -25,6 +25,7 @@ install:
     - cd build
     - CC=$COMP cmake ../src
     - make
+    - cd ..
 
 script:
     - ./tests/test.py

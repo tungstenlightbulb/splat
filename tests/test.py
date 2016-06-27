@@ -4,6 +4,8 @@ import subprocess
 import urllib.request
 from numpy import isclose
 
+rdir = Path(__file__).parents[1]
+
 ofn='WNYE-DT_25-to-Oyster_Bay.txt'
 url='http://dds.cr.usgs.gov/srtm/version2_1/SRTM3/North_America/N40W074.hgt.zip'
 sdffn=Path('40:41:73:74.sdf')
@@ -14,9 +16,13 @@ if not sdffn.is_file():
     subprocess.run(['unzip','N40W074.hgt.zip'])
     subprocess.run(['srtm2sdf','N40W074.hgt'])
 
+print(rdir)
 
-subprocess.run(['../build/splat/splat','-metric','-t','wnye.qth','-o','topo.ppm',
-                '-r','oyster.qth','-e','el.png','-p','terr.png'])
+subprocess.run([str(rdir/'build/splat/splat'),'-metric',
+                '-t',str(rdir/'tests/wnye.qth'),
+                '-o','topo.ppm',
+                '-r',str(rdir/'tests/oyster.qth'),
+                '-e','el.png','-p','tests/terr.png'])
 #%% load output
 out = {}
 with open(ofn,'r',encoding='iso-8859-1') as f:
