@@ -1,14 +1,16 @@
-language: c
-
-os: 
-    - linux
-    - osx
-
 notifications:
   email: false
 
 git:
   depth: 3
+
+matrix:
+  include:
+    - os: linux
+      python: 3.5
+
+    - os: osx
+      python: 3.5      
 
 install: 
     - cd build
