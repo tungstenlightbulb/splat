@@ -1,5 +1,5 @@
-.. image:: https://travis-ci.org/scienceopen/splat.svg?branch=master
-    :target: https://travis-ci.org/scienceopen/splat
+.. image:: https://travis-ci.org/watkipet/splat.svg?branch=master
+    :target: https://travis-ci.org/watkipet/splat
 
 ======================================================================
 SPLAT!: A Terrestrial RF Path and Terrain Analysis Tool for Unix/Linux
