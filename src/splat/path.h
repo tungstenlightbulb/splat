@@ -9,10 +9,20 @@
 #ifndef path_h
 #define path_h
 
-#include <stdio.h>
+#include <vector>
+
+class Site;
+class ElevationMap;
+
+// Forward-declare ElevationMap since ElevationMap uses Path
+class ElevationMap;
 
 class Path
 {
+private:
+    double ppd;
+    int arraysize;
+    
 public:
     std::vector<double> lat;
     std::vector<double> lon;
@@ -21,13 +31,17 @@ public:
     int length;
     
 public:
-    Path(int size)
+    Path(int size, double ppd)
     :lat(std::vector<double>(size)),
     lon(std::vector<double>(size)),
     elevation(std::vector<double>(size)),
     distance(std::vector<double>(size)),
-    length(0)
+    arraysize(size),
+    length(0),
+    ppd(ppd)
     {}
+    
+    void ReadPath(const Site &source, const Site &destination, const ElevationMap &em);
     
     ~Path();
 };

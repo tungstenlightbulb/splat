@@ -9,7 +9,7 @@
 #ifndef dem_h
 #define dem_h
 
-#include <stdio.h>
+#include <vector>
 
 class Dem
 {
