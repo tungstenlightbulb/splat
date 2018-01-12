@@ -8,7 +8,7 @@ from numpy import isclose
 rdir = Path(__file__).parents[1]
 
 ofn='WNYE-DT_25-to-Oyster_Bay.txt'
-url='http://dds.cr.usgs.gov/srtm/version2_1/SRTM3/North_America/N40W074.hgt.zip'
+url='https://dds.cr.usgs.gov/srtm/version2_1/SRTM3/North_America/N40W074.hgt.zip'
 sdffn=Path('40:41:73:74.sdf')
 
 if not sdffn.is_file():
