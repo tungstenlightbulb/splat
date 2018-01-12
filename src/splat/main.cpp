@@ -7,9 +7,12 @@
 //
 
 #include <iostream>
-#include <math.h>
+#include <cmath>
+#include <cstdio>
 #include <vector>
 #include <string>
+#include <cstring>
+#include <cstdlib>
 #include <sstream>
 #include <iostream>
 #include <fstream>
@@ -656,7 +659,7 @@ int main(int argc, const char * argv[])
         std::string config_path = env;
         config_path += "/.splat_path";
         fstream fs;
-        fs.open(config_path, fstream::in);
+        fs.open(config_path.c_str(), fstream::in);
         
         if (fs)
         {
@@ -1139,7 +1142,7 @@ int main(int argc, const char * argv[])
     if (sr.command_line_log && !logfile.empty())
     {
         fstream fs;
-        fs.open(logfile, fstream::out);
+        fs.open(logfile.c_str(), fstream::out);
         
         // TODO: Should we fail silently if we can't open the logfile. Shouldn't we WARN?
         if (fs)

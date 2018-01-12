@@ -9,7 +9,7 @@
 #ifndef lrp_h
 #define lrp_h
 
-#include <stdio.h>
+#include <string>
 
 class Lrp
 {

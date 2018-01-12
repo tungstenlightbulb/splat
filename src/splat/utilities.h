@@ -9,8 +9,7 @@
 #ifndef utilities_h
 #define utilities_h
 
-#include <stdio.h>
-#include <bzlib.h>
+#include <string>
 
 #ifndef PI
 #define PI 3.141592653589793
@@ -58,8 +57,6 @@ public:
     static std::string DivideExtension(std::string &path, const std::string &default_extension);
     
     static void Chomp(std::string &str);
-    
-    static char *BZfgets(BZFILE *bzfd, unsigned length);
 };
 
 #endif /* utilities_h */

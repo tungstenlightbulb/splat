@@ -10,8 +10,9 @@
 #include <vector>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <unistd.h>
-#include <bzlib.h>
+
 #include "site.h"
 #include "path.h"
 #include "pat_file.h"

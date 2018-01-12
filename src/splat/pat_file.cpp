@@ -8,6 +8,8 @@
 
 #include <string>
 #include <cmath>
+#include <cstring>
+#include <cstdio>
 #include "site.h"
 #include "splat_run.h"
 #include "pat_file.h"

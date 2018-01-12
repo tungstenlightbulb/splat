@@ -9,7 +9,13 @@
 #ifndef report_h
 #define report_h
 
-#include <stdio.h>
+#include <string>
+
+class ElevationMap;
+class SplatRun;
+class Path;
+class Site;
+class PatFile;
 
 class Report
 {

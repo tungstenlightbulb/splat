@@ -10,6 +10,7 @@
 #include <vector>
 #include <cstdlib>
 #include <cmath>
+#include <cstring>
 #include <bzlib.h>
 #include "site.h"
 #include "path.h"

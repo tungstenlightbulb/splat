@@ -8,6 +8,7 @@
 
 #include <string>
 #include <cmath>
+#include <cstdio>
 #include "site.h"
 #include "utilities.h"
 

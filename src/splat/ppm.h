@@ -9,7 +9,13 @@
 #ifndef ppm_h
 #define ppm_h
 
-#include <stdio.h>
+#include <string>
+#include <vector>
+
+class SplatRun;
+class ElevationMap;
+class Site;
+class Region;
 
 class Ppm {
 private:

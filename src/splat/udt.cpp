@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
+#include <cstring>
 #include <unistd.h>
 
 #include "elevation_map.h"

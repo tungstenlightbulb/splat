@@ -7,7 +7,9 @@
 //
 
 #include <string>
+#include <cstring>
 #include <cmath>
+#include <cstdio>
 #include <iostream>
 #include "site.h"
 #include "lrp.h"

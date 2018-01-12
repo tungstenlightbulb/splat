@@ -9,6 +9,7 @@
 #include "boundary_file.h"
 
 #include <string>
+#include <cstring>
 #include <cstdio>
 
 #include "site.h"

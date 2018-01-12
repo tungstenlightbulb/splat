@@ -9,7 +9,7 @@
 #ifndef pat_file_h
 #define pat_file_h
 
-#include <stdio.h>
+#include <string>
 
 class PatFile
 {

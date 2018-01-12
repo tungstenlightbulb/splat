@@ -9,6 +9,8 @@
 #include "region.h"
 
 #include <string>
+#include <cstdio>
+#include <cstring>
 #include "site.h"
 
 using namespace std;

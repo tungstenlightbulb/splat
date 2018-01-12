@@ -9,7 +9,7 @@
 #ifndef anf_h
 #define anf_h
 
-#include <stdio.h>
+#include <string>
 
 class Sdf;
 class Lrp;

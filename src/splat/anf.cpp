@@ -7,6 +7,7 @@
 //
 
 #include <string>
+#include <cstring>
 #include <cmath>
 #include "elevation_map.h"
 #include "anf.h"

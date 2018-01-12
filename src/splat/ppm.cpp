@@ -8,9 +8,9 @@
 
 #include <string>
 #include <vector>
-#include <cmath>
 #include <fstream>
-#include <bzlib.h>
+#include <cmath>
+#include <cstdio>
 #include "utilities.h"
 #include "site.h"
 #include "path.h"
@@ -1495,7 +1495,7 @@ void Ppm::WritePPMDBM(Region &region)
 void Ppm::WriteKmlForPpm(const string &groundOverlayName, const string &description, bool writeScreenOverlay, const string &kmlfile, const string &mapfile, double north, double south, double east, double west, const string &ckfile)
 {
     fstream fs;
-    fs.open(kmlfile, fstream::out);
+    fs.open(kmlfile.c_str(), fstream::out);
     
     // TODO: Should we fail silently if we can't open. Shouldn't we WARN?
     if (!fs)
@@ -1580,7 +1580,7 @@ void Ppm::WriteKmlForPpm(const string &groundOverlayName, const string &descript
 void Ppm::WriteGeo(const string &geofile, const string &mapfile, double north, double south, double east, double west, unsigned int width, unsigned int height)
 {
     fstream fs;
-    fs.open(geofile, fstream::out);
+    fs.open(geofile.c_str(), fstream::out);
     
     // TODO: Should we fail silently if we can't open. Shouldn't we WARN?
     if (!fs)

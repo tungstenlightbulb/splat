@@ -9,7 +9,9 @@
 #include <math.h>
 #include <string>
 #include <sstream>
-#include <bzlib.h>
+#include <cstring>
+#include <cstdio>
+#include <algorithm>
 #include "utilities.h"
 #include "site.h"
 #include "splat_run.h"
@@ -266,7 +268,7 @@ string Utilities::DivideExtension(string &path, const string &default_extension)
 
 void Utilities::Chomp(string &str)
 {
-    str.erase(std::remove(str.begin(), str.end(), '\n'), str.end());
-    str.erase(std::remove(str.begin(), str.end(), '\r'), str.end());
+    str.erase(remove(str.begin(), str.end(), '\n'), str.end());
+    str.erase(remove(str.begin(), str.end(), '\r'), str.end());
 }
 

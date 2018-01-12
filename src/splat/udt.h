@@ -11,8 +11,8 @@
 
 #include <string>
 
-#include "splat_run.h"
-#include "elevation_map.h"
+class SplatRun;
+class ElevationMap;
 
 class Udt
 {
