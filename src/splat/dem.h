@@ -1,15 +1,17 @@
-//
-//  dem.h
-//  splat
-//
-//  Created by Peter Work Watkins on 4/8/16.
-//  Copyright © 2016 ke7ist. All rights reserved.
-//
+/** @file dem.h
+ *
+ * File created by Peter Watkins (KE7IST) 4/8/16.
+ * Derived from original project code.
+ * Splat!
+ * @copyright 1997 - 2018 John A. Magliacane (KD2BD) and contributors.
+ * See revision control history for contributions.
+ * This file is covered by the LICENSE.md file in the root of this project.
+ */
 
 #ifndef dem_h
 #define dem_h
 
-#include <stdio.h>
+#include <vector>
 
 class Dem
 {

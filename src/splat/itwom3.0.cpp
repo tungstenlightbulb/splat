@@ -1,4 +1,4 @@
-/********************************************************************************
+/** @file itwom3.0.cpp
 * ITWOM version 3.0a, January 20, 2011  File: itwom3.0a.cpp                     *
 * Provenance:   Further test version of itwom2.0m re adj to Hrzn range factors  *
 * 1. This file is based on a thorough debugging, completion, and update of the  *
