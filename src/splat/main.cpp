@@ -1,10 +1,14 @@
-//
-//  main.cpp
-//  splat
-//
-//  Created by Peter Work Watkins on 6/17/15.
-//  Copyright (c) 2015 ke7ist. All rights reserved.
-//
+/** @file main.cpp
+ *
+ * SPLAT!: An RF Signal Path Loss And Terrain Analysis Tool
+ * Project started in 1997 by John A. Magliacane (KD2BD)
+ * File created by Peter Watkins (KE7IST) 6/17/15.
+ * Derived from original project code.
+ * Splat!
+ * @copyright 1997 - 2018 John A. Magliacane (KD2BD) and contributors.
+ * See revision control history for contributions.
+ * This file is covered by the LICENSE.md file in the root of this project.
+ */
 
 #include <iostream>
 #include <cmath>

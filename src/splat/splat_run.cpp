@@ -1,24 +1,12 @@
-/****************************************************************************\
-*	   SPLAT!: An RF Signal Path Loss And Terrain Analysis Tool          *
-******************************************************************************
-*	     Project started in 1997 by John A. Magliacane, KD2BD 	     *
-*			  Last update: 07-Feb-2014			     *
-******************************************************************************
-*         Please consult the documentation for a complete list of	     *
-*	     individuals who have contributed to this project. 		     *
-******************************************************************************
-*                                                                            *
-*  This program is free software; you can redistribute it and/or modify it   *
-*  under the terms of the GNU General Public License as published by the     *
-*  Free Software Foundation; either version 2 of the License or any later    *
-*  version.								     *
-* 									     *
-*  This program is distributed in the hope that it will useful, but WITHOUT  *
-*  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or     *
-*  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License     *
-*  for more details.							     *
-*									     *
-\****************************************************************************/
+/** @file splat_run.cpp
+ *
+ * File created by Peter Watkins (KE7IST) 6/17/15.
+ * Derived from original project code.
+ * Splat!
+ * @copyright 1997 - 2018 John A. Magliacane (KD2BD) and contributors.
+ * See revision control history for contributions.
+ * This file is covered by the LICENSE.md file in the root of this project.
+ */
 
 #include <stdio.h>
 #include <math.h>

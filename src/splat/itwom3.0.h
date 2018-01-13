@@ -1,10 +1,12 @@
-//
-//  itwom3.0.h
-//  splat
-//
-//  Created by Peter Work Watkins on 6/17/15.
-//  Copyright (c) 2015 ke7ist. All rights reserved.
-//
+/** @file itwom3.0.h
+ *
+ * File created by Peter Watkins (KE7IST) 1/8/18.
+ * Derived from original project code.
+ * Splat!
+ * @copyright 1997 - 2018 John A. Magliacane (KD2BD) and contributors.
+ * See revision control history for contributions.
+ * This file is covered by the LICENSE.md file in the root of this project.
+ */
 
 #ifndef splat_itwom3_0_h
 #define splat_itwom3_0_h

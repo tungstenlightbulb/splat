@@ -1,10 +1,12 @@
-//
-//  elevation_map.h
-//  splat
-//
-//  Created by Peter Work Watkins on 8/12/16.
-//  Copyright © 2016 ke7ist. All rights reserved.
-//
+/** @file elevation_map.h
+ *
+ * File created by Peter Watkins (KE7IST) 8/12/16.
+ * Derived from original project code.
+ * Splat!
+ * @copyright 1997 - 2018 John A. Magliacane (KD2BD) and contributors.
+ * See revision control history for contributions.
+ * This file is covered by the LICENSE.md file in the root of this project.
+ */
 
 #ifndef elevation_map_h
 #define elevation_map_h

@@ -1,10 +1,12 @@
-//
-//  region.h
-//  splat
-//
-//  Created by Peter Work Watkins on 1/8/18.
-//  Copyright © 2018 ke7ist. All rights reserved.
-//
+/** @file region.h
+ *
+ * File created by Peter Watkins (KE7IST) 1/8/18.
+ * Derived from original project code.
+ * Splat!
+ * @copyright 1997 - 2018 John A. Magliacane (KD2BD) and contributors.
+ * See revision control history for contributions.
+ * This file is covered by the LICENSE.md file in the root of this project.
+ */
 
 #ifndef region_h
 #define region_h
@@ -17,8 +19,6 @@ public:
     unsigned char color[32][3];
     int level[32];
     int levels;
-    
-    
     
     void LoadLossColors(const Site &xmtr);
     void LoadDBMColors(const Site &xmtr);
