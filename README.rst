@@ -2,7 +2,7 @@
     :target: https://travis-ci.org/watkipet/splat
 
 ======================================================================
-SPLAT!: A Terrestrial RF Path and Terrain Analysis Tool for Unix/Linux
+SPLAT!: A (Lunar) RF Path and Terrain Analysis Tool for Unix/Linux
 ======================================================================
 
 .. contents::
