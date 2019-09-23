@@ -15,7 +15,7 @@
 
 #include "site.h"
 
-#define EARTHRADIUS 20902230.97
+#define EARTHRADIUS 5699146.98 //changed to Moon radius
 #define	METERS_PER_MILE 1609.344
 #define METERS_PER_FOOT 0.3048
 #define	KM_PER_MILE 1.609344
