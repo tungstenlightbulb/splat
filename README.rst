@@ -28,7 +28,7 @@ SPLAT! builds with CMake version 2.6 or greater.
 SPLAT! requires the libbzip2-1.0.1 (or later) compression library and
 header files for successful compilation.  bzip2/libbzip2 is available
 at: 
-http://www.bzip2.org/
+https://www.sourceware.org/bzip2/
 
 SPLAT! also requires the zlib general purpose compression library.
 The latest version of zlib may be found at: http://www.gzip.org/zlib/
